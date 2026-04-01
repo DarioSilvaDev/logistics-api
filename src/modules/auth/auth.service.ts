@@ -21,13 +21,16 @@ import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { AuthDocument } from './schemas/auth.schema';
 import { envs } from 'src/config/envs.config';
 
-export interface AuthResponse {
+export interface AuthRegisterResponse {
   user: {
     id: string;
     email: string;
     firstName: string;
     lastName: string;
   };
+}
+
+export interface AuthResponse extends AuthRegisterResponse {
   accessToken: string;
   refreshToken: string;
 }
@@ -53,7 +56,7 @@ export class AuthService {
     this.refreshTokenTtlDays = envs.refresh_token_ttl_days
   }
 
-  async register(dto: RegisterDto): Promise<AuthResponse> {
+  async register(dto: RegisterDto): Promise<AuthRegisterResponse> {
     const email = dto.email.trim().toLowerCase();
     const firstName = dto.firstName.trim();
     const lastName = dto.lastName.trim();
@@ -92,12 +95,6 @@ export class AuthService {
       throw error;
     }
 
-    const tokens = await this.generateTokenPair(
-      user._id.toString(),
-      user.email,
-    );
-    await this.persistRefreshToken(user._id.toString(), tokens.refreshToken);
-
     this.logger.log(`User registered with id=${user._id.toString()}`);
 
     return {
@@ -107,7 +104,6 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
       },
-      ...tokens,
     };
   }
 
@@ -179,7 +175,7 @@ export class AuthService {
       payload = await this.jwtService.verifyAsync<JwtPayload>(
         dto.refreshToken,
         {
-          secret: envs.jwt.access_secret,
+          secret: envs.jwt.refresh_secret,
         },
       );
     } catch {
