@@ -1,5 +1,6 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
@@ -17,12 +18,28 @@ async function bootstrap() {
     }),
   );
 
-  app.setGlobalPrefix("api")
+  app.setGlobalPrefix('api');
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new LoggingInterceptor());
 
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('Logistics API')
+    .setDescription('Documentacion OpenAPI')
+    .setVersion('1.0.0')
+    .addBearerAuth()
+    .build();
+
+  const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, swaggerDocument, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
+
   const port = envs.port;
   await app.listen(port);
-  new Logger('Bootstrap').log(`API ${envs.package_name} running on port ${port}`);
+  new Logger('Bootstrap').log(
+    `API ${envs.package_name} running on port ${port}`,
+  );
 }
 void bootstrap();
