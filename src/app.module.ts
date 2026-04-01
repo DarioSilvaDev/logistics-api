@@ -7,12 +7,8 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
-  imports: [
-    MongooseModule.forRoot(envs.db.url),
-    UsersModule,
-    AuthModule,
-  ],
+  imports: [MongooseModule.forRoot(envs.db.url), UsersModule, AuthModule],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule {}
+export class AppModule { }

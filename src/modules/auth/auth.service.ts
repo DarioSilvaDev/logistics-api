@@ -50,10 +50,10 @@ export class AuthService {
     private readonly authRepository: IAuthRepository,
     private readonly jwtService: JwtService,
   ) {
-    this.bcryptSaltRounds = envs.bcrypt_salt_rounds
-    this.maxLoginAttempts = envs.max_login_attempts,
-    this.blockDurationMinutes = envs.block_duration_minutes
-    this.refreshTokenTtlDays = envs.refresh_token_ttl_days
+    this.bcryptSaltRounds = envs.bcrypt_salt_rounds;
+    this.maxLoginAttempts = envs.max_login_attempts;
+    this.blockDurationMinutes = envs.block_duration_minutes;
+    this.refreshTokenTtlDays = envs.refresh_token_ttl_days;
   }
 
   async register(dto: RegisterDto): Promise<AuthRegisterResponse> {
@@ -254,13 +254,13 @@ export class AuthService {
     const payload: JwtPayload = { sub: userId, email };
 
     const [accessToken, refreshToken] = await Promise.all([
-      this.jwtService.sign(payload, {
+      this.jwtService.signAsync(payload, {
         secret: envs.jwt.access_secret,
-        expiresIn: envs.jwt.access_expires_in as StringValue
+        expiresIn: envs.jwt.access_expires_in as StringValue,
       }),
       this.jwtService.signAsync(payload, {
         secret: envs.jwt.refresh_secret,
-        expiresIn: envs.jwt.refresh_expires_in as StringValue
+        expiresIn: envs.jwt.refresh_expires_in as StringValue,
       }),
     ]);
 

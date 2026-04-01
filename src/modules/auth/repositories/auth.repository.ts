@@ -69,7 +69,7 @@ export class AuthRepository implements IAuthRepository {
             blockedUntil: null,
           },
         },
-        { returnDocument: "after" },
+        { returnDocument: 'after' },
       )
       .exec();
   }
@@ -86,7 +86,7 @@ export class AuthRepository implements IAuthRepository {
             lastLogin: date,
           },
         },
-        { returnDocument: "after" },
+        { returnDocument: 'after' },
       )
       .exec();
   }
@@ -105,7 +105,7 @@ export class AuthRepository implements IAuthRepository {
             refreshTokenExpiresAt,
           },
         },
-        { returnDocument: "after" },
+        { returnDocument: 'after' },
       )
       .exec();
   }

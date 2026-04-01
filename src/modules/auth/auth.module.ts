@@ -17,10 +17,10 @@ import { envs } from 'src/config/envs.config';
   imports: [
     PassportModule.register({ defaultStrategy: 'jwt' }),
     JwtModule.register({
-        secret: envs.jwt.access_secret,
-        signOptions: {
-          algorithm: "HS256",
-        }
+      secret: envs.jwt.access_secret,
+      signOptions: {
+        algorithm: 'HS256',
+      },
     }),
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
