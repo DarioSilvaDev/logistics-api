@@ -116,8 +116,9 @@ export class AuthService {
   /**
    * Inicia sesión para un usuario existente.
    * @param dto DTO con las credenciales de inicio de sesión.
-   * @returns La respuesta con los tokens de autenticación.
    * @throws UnauthorizedException si las credenciales son inválidas.
+   * @throws HttpException si la cuenta esta bloqueada temporalmente por intentos fallidos.
+   * @returns La respuesta con los tokens de autenticacion.
    */
   async login(dto: LoginDto): Promise<AuthResponse> {
     const email = dto.email.trim().toLowerCase();
@@ -181,10 +182,10 @@ export class AuthService {
   }
 
   /**
-   * Actualiza los tokens de autenticación utilizando un token de refresco.
+   * Actualiza los tokens de autenticacion utilizando un token de refresco valido.
    * @param dto DTO con el token de refresco.
-   * @returns La respuesta con los nuevos tokens de autenticación.
-   * @throws UnauthorizedException si el token de refresco es inválido.
+   * @throws UnauthorizedException si el token es invalido, no coincide o ya expiro.
+   * @returns La respuesta con los nuevos tokens de autenticacion.
    */
   async refreshToken(dto: RefreshTokenDto): Promise<AuthResponse> {
     let payload: JwtPayload;
@@ -243,9 +244,10 @@ export class AuthService {
   }
 
   /**
-   * Cierra la sesión de un usuario.
+   * Cierra la sesion de un usuario eliminando su refresh token persistido.
    * @param userId ID del usuario.
-   * @returns La respuesta con el mensaje de éxito.
+   * @throws Error si falla la limpieza del token en el repositorio.
+   * @returns La respuesta con el mensaje de exito.
    */
   async logout(userId: string): Promise<{ message: string }> {
     await this.authRepository.clearRefreshToken(userId);
@@ -253,10 +255,11 @@ export class AuthService {
   }
 
   /**
-   * Verifica que el usuario no esté bloqueado.
-   * @param auth Documento de autenticación del usuario.
+   * Verifica que el usuario no este bloqueado antes de continuar el login.
+   * @param auth Documento de autenticacion del usuario.
    * @param userId ID del usuario.
-   * @returns Una promesa que se resuelve si el usuario no está bloqueado.
+   * @throws HttpException si la cuenta permanece bloqueada.
+   * @returns Una promesa que se resuelve si el usuario puede continuar.
    */
   private async assertNotBlocked(
     auth: AuthDocument,
@@ -277,10 +280,11 @@ export class AuthService {
   }
 
   /**
-   * Genera un par de tokens de autenticación.
+   * Genera un par de tokens JWT de acceso y refresco.
    * @param userId ID del usuario.
-   * @param email Correo electrónico del usuario.
-   * @returns La respuesta con los tokens de autenticación.
+   * @param email Correo electronico del usuario.
+   * @throws Error si ocurre un fallo al firmar los tokens.
+   * @returns Un objeto con accessToken y refreshToken.
    */
   private async generateTokenPair(
     userId: string,
@@ -302,9 +306,11 @@ export class AuthService {
     return { accessToken, refreshToken };
   }
   /**
-   * Almacena un token de refresco para un usuario.
+   * Almacena el hash del token de refresco y su expiracion para un usuario.
    * @param userId ID del usuario.
    * @param refreshToken Token de refresco.
+   * @throws Error si falla el hash del token o la persistencia en repositorio.
+   * @returns Una promesa que se resuelve al completar la actualizacion.
    */
   private async persistRefreshToken(
     userId: string,
@@ -325,8 +331,9 @@ export class AuthService {
     );
   }
   /**
-   * Verifica si un error es debido a una clave duplicada.
+   * Verifica si un error corresponde a una clave duplicada en MongoDB.
    * @param error Error a verificar.
+   * @throws Error no aplica de forma explicita; solo evalua el valor recibido.
    * @returns true si el error es de clave duplicada, false en caso contrario.
    */
   private isDuplicateKeyError(error: unknown): boolean {

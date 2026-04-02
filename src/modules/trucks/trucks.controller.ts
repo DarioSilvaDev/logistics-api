@@ -38,7 +38,7 @@ import { TrucksService } from './trucks.service';
 @UseGuards(JwtAuthGuard)
 @Controller('trucks')
 export class TrucksController {
-  constructor(private readonly trucksService: TrucksService) { }
+  constructor(private readonly trucksService: TrucksService) {}
 
   @ApiOperation({ summary: 'Crear un truck' })
   @ApiResponse({
@@ -75,7 +75,10 @@ export class TrucksController {
     schema: {
       example: {
         statusCode: 400,
-        message: ['year must have a length of 4 characters', 'capacityKg must be a positive number'],
+        message: [
+          'year must have a length of 4 characters',
+          'capacityKg must be a positive number',
+        ],
         path: '/api/trucks',
         timestamp: '2026-04-01T12:00:00.000Z',
         requestId: '2f72c04f-c44a-4ef8-933e-989de6802d74',
@@ -197,7 +200,9 @@ export class TrucksController {
     schema: {
       example: {
         statusCode: 400,
-        message: ['status must be one of the following values: AVAILABLE, IN_MAINTENANCE, INACTIVE'],
+        message: [
+          'status must be one of the following values: AVAILABLE, IN_MAINTENANCE, INACTIVE',
+        ],
         path: '/api/trucks/invalid-id/status',
         timestamp: '2026-04-01T12:00:00.000Z',
         requestId: '2f72c04f-c44a-4ef8-933e-989de6802d74',

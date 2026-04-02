@@ -28,13 +28,13 @@ export class TrucksService {
   constructor(
     @Inject(TRUCK_REPOSITORY)
     private readonly truckRepository: ITruckRepository,
-  ) { }
+  ) {}
 
   /**
-   * Crea un nuevo truck.
+   * Crea un nuevo truck asociado al usuario autenticado.
    * @param userId ID del usuario que crea el truck.
    * @param dto DTO con los datos del truck a crear.
-   * @throws BadRequestException si el año del truck no es valido o si el ID del usuario no es un ObjectId valido.
+   * @throws BadRequestException si el anio del truck no cumple el formato esperado.
    * @throws ConflictException si ya existe un truck con la misma placa.
    * @returns La respuesta del truck creado.
    */
@@ -65,10 +65,9 @@ export class TrucksService {
   }
   /**
    * Obtiene todos los trucks pertenecientes a un usuario especifico.
-   * @param userId ID del usuario propietario de los trucks a consultar. 
-   * @returns Lista de trucks pertenecientes al usuario. Si el usuario no tiene trucks, se retorna una lista vacia.
-   * @throws BadRequestException si el ID del usuario no es un ObjectId valido.
-   * @throws NotFoundException si no se encuentran trucks para el usuario. 
+   * @param userId ID del usuario propietario de los trucks a consultar.
+   * @throws Error si ocurre una falla en la capa de persistencia.
+   * @returns Lista de trucks pertenecientes al usuario. Si no hay registros, retorna una lista vacia.
    */
   async findAll(userId: string): Promise<TruckResponse[]> {
     const trucks = await this.truckRepository.findAllByOwner(userId);
@@ -125,6 +124,7 @@ export class TrucksService {
    * Verifica si un ID es un ObjectId valido.
    * @param id ID a verificar.
    * @throws BadRequestException si el ID no es un ObjectId valido.
+   * @returns Nada; solo valida o lanza una excepcion.
    */
   private assertValidObjectId(id: string): void {
     if (!Types.ObjectId.isValid(id)) {
@@ -133,9 +133,10 @@ export class TrucksService {
   }
 
   /**
-   * Verifica si un año es valido. Un año valido debe ser un string de 4 digitos numericos y no puede ser mayor al año actual.
-   * @param year Año a verificar.
-   * @throws BadRequestException si el año no es valido.
+   * Verifica si un anio es valido. Debe tener 4 digitos numericos y no superar el anio actual.
+   * @param year Anio a verificar.
+   * @throws BadRequestException si el anio no es valido.
+   * @returns Nada; solo valida o lanza una excepcion.
    */
   private assertValidYear(year: string): void {
     if (!/^\d{4}$/.test(year)) {
@@ -153,6 +154,7 @@ export class TrucksService {
   /**
    * Mapea un documento de truck a una respuesta de truck.
    * @param truck Documento de truck a mapear.
+   * @throws Error no aplica de forma explicita durante el mapeo.
    * @returns Respuesta de truck mapeada.
    */
   private mapTruck(truck: TruckDocument): TruckResponse {
