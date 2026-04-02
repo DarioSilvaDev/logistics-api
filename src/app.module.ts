@@ -5,12 +5,14 @@ import { AppService } from './app.service';
 import { envs } from './config/envs.config';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { TrucksModule } from './modules/trucks/trucks.module';
 
 @Module({
   imports: [
     MongooseModule.forRoot(envs.db.url),
     UsersModule,
     AuthModule,
+    TrucksModule,
   ],
   controllers: [AppController],
   providers: [AppService],
