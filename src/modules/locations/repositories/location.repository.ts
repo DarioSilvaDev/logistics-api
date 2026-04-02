@@ -12,7 +12,7 @@ export class LocationRepository implements ILocationRepository {
   constructor(
     @InjectModel(Location.name)
     private readonly locationModel: Model<Location>,
-  ) { }
+  ) {}
 
   async create(
     input: CreateLocationRepositoryInput,

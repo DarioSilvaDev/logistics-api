@@ -46,7 +46,7 @@ import { LocationsService } from './locations.service';
 @UseGuards(JwtAuthGuard)
 @Controller('locations')
 export class LocationsController {
-  constructor(private readonly locationsService: LocationsService) { }
+  constructor(private readonly locationsService: LocationsService) {}
 
   @ApiOperation({ summary: 'Crear una location' })
   @ApiCreatedResponse({

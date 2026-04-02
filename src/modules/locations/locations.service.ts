@@ -28,7 +28,7 @@ export class LocationsService {
     @Inject(LOCATION_REPOSITORY)
     private readonly locationRepository: ILocationRepository,
     private readonly googlePlacesService: GooglePlacesService,
-  ) { }
+  ) {}
 
   /**
    * Crea una ubicacion para el usuario validando duplicados y enriqueciendo datos con Google Places.
