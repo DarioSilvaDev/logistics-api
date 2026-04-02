@@ -5,6 +5,7 @@ export interface IEnvConfig {
   PORT: number;
   NODE_ENV: string;
   MONGO_URI: string;
+  GOOGLE_MAPS_API_KEY: string;
   JWT_ACCESS_SECRET: string;
   JWT_REFRESH_SECRET: string;
   JWT_ACCESS_EXPIRES_IN: string;
@@ -24,6 +25,7 @@ const envsSchema = joi
       .valid('development', 'production', 'test', 'local')
       .default('development'),
     MONGO_URI: joi.string().required(),
+    GOOGLE_MAPS_API_KEY: joi.string().required(),
     JWT_ACCESS_SECRET: joi.string().required(),
     JWT_REFRESH_SECRET: joi.string().required(),
     JWT_ACCESS_EXPIRES_IN: joi.string().required(),
@@ -54,6 +56,9 @@ export const envs = {
   package_name: envsConfig.PACKAGE_NAME,
   db: {
     url: envsConfig.MONGO_URI,
+  },
+  google: {
+    maps_api_key: envsConfig.GOOGLE_MAPS_API_KEY,
   },
   jwt: {
     access_secret: envsConfig.JWT_ACCESS_SECRET,
