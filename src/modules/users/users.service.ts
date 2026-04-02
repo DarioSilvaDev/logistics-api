@@ -7,8 +7,12 @@ export class UsersService {
   constructor(
     @Inject(USER_REPOSITORY)
     private readonly userRepository: IUserRepository,
-  ) {}
-
+  ) { }
+  /**
+   * Obtiene el perfil de un usuario.
+   * @param userId ID del usuario.
+   * @returns La respuesta con los datos del usuario.
+   */
   async getProfile(userId: string): Promise<{
     id: string;
     email: string;

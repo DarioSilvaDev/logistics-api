@@ -55,7 +55,13 @@ export class AuthService {
     this.blockDurationMinutes = envs.block_duration_minutes;
     this.refreshTokenTtlDays = envs.refresh_token_ttl_days;
   }
-
+  /**
+   * Registra un nuevo usuario.
+   * @param dto DTO con los datos del usuario a registrar.
+   * @throws ConflictException si el email ya está registrado.
+   * @throws HttpException si ocurre un error al crear el usuario o el registro de autenticación.
+   * @returns La respuesta del usuario registrado.
+   */
   async register(dto: RegisterDto): Promise<AuthRegisterResponse> {
     const email = dto.email.trim().toLowerCase();
     const firstName = dto.firstName.trim();
@@ -107,6 +113,12 @@ export class AuthService {
     };
   }
 
+  /**
+   * Inicia sesión para un usuario existente.
+   * @param dto DTO con las credenciales de inicio de sesión.
+   * @returns La respuesta con los tokens de autenticación.
+   * @throws UnauthorizedException si las credenciales son inválidas.
+   */
   async login(dto: LoginDto): Promise<AuthResponse> {
     const email = dto.email.trim().toLowerCase();
     const user = await this.userRepository.findByEmail(email);
@@ -168,6 +180,12 @@ export class AuthService {
     };
   }
 
+  /**
+   * Actualiza los tokens de autenticación utilizando un token de refresco.
+   * @param dto DTO con el token de refresco.
+   * @returns La respuesta con los nuevos tokens de autenticación.
+   * @throws UnauthorizedException si el token de refresco es inválido.
+   */
   async refreshToken(dto: RefreshTokenDto): Promise<AuthResponse> {
     let payload: JwtPayload;
 
@@ -224,11 +242,22 @@ export class AuthService {
     };
   }
 
+  /**
+   * Cierra la sesión de un usuario.
+   * @param userId ID del usuario.
+   * @returns La respuesta con el mensaje de éxito.
+   */
   async logout(userId: string): Promise<{ message: string }> {
     await this.authRepository.clearRefreshToken(userId);
     return { message: 'Logged out successfully' };
   }
 
+  /**
+   * Verifica que el usuario no esté bloqueado.
+   * @param auth Documento de autenticación del usuario.
+   * @param userId ID del usuario.
+   * @returns Una promesa que se resuelve si el usuario no está bloqueado.
+   */
   private async assertNotBlocked(
     auth: AuthDocument,
     userId: string,
@@ -247,6 +276,12 @@ export class AuthService {
     await this.authRepository.resetLoginAttempts(userId);
   }
 
+  /**
+   * Genera un par de tokens de autenticación.
+   * @param userId ID del usuario.
+   * @param email Correo electrónico del usuario.
+   * @returns La respuesta con los tokens de autenticación.
+   */
   private async generateTokenPair(
     userId: string,
     email: string,
@@ -266,7 +301,11 @@ export class AuthService {
 
     return { accessToken, refreshToken };
   }
-
+  /**
+   * Almacena un token de refresco para un usuario.
+   * @param userId ID del usuario.
+   * @param refreshToken Token de refresco.
+   */
   private async persistRefreshToken(
     userId: string,
     refreshToken: string,
@@ -285,7 +324,11 @@ export class AuthService {
       refreshTokenExpiresAt,
     );
   }
-
+  /**
+   * Verifica si un error es debido a una clave duplicada.
+   * @param error Error a verificar.
+   * @returns true si el error es de clave duplicada, false en caso contrario.
+   */
   private isDuplicateKeyError(error: unknown): boolean {
     return (
       typeof error === 'object' &&
