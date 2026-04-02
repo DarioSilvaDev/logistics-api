@@ -1,0 +1,1 @@
+export const TRUCK_REPOSITORY = 'TRUCK_REPOSITORY';

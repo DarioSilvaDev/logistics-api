@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import * as joi from "joi";
+import * as joi from 'joi';
 
 export interface IEnvConfig {
   PORT: number;
@@ -16,44 +16,44 @@ export interface IEnvConfig {
   PACKAGE_NAME: string;
 }
 
-const envsSchema = joi.object({
-  PORT: joi.number().port().default(3000),
-  NODE_ENV: joi
-    .string()
-    .valid('development', 'production', 'test', 'local')
-    .default("development"),
-  MONGO_URI: joi.string().required(),
-  JWT_ACCESS_SECRET: joi.string().required(),
-  JWT_REFRESH_SECRET: joi.string().required(),
-  JWT_ACCESS_EXPIRES_IN: joi.string().required(),
-  JWT_REFRESH_EXPIRES_IN: joi.string().required(),
-  BCRYPT_SALT_ROUNDS: joi.number().default(10),
-  MAX_LOGIN_ATTEMPTS: joi.number().default(5),
-  BLOCK_DURATION_MINUTES: joi.number().default(15),
-  REFRESH_TOKEN_TTL_DAYS: joi.number().default(2),
-  PACKAGE_NAME: joi
-    .string()
-    .default(process.env.npm_package_name || 'logistics-api'),
-}).unknown(true);
+const envsSchema = joi
+  .object<IEnvConfig>({
+    PORT: joi.number().port().default(3000),
+    NODE_ENV: joi
+      .string()
+      .valid('development', 'production', 'test', 'local')
+      .default('development'),
+    MONGO_URI: joi.string().required(),
+    JWT_ACCESS_SECRET: joi.string().required(),
+    JWT_REFRESH_SECRET: joi.string().required(),
+    JWT_ACCESS_EXPIRES_IN: joi.string().required(),
+    JWT_REFRESH_EXPIRES_IN: joi.string().required(),
+    BCRYPT_SALT_ROUNDS: joi.number().default(10),
+    MAX_LOGIN_ATTEMPTS: joi.number().default(5),
+    BLOCK_DURATION_MINUTES: joi.number().default(15),
+    REFRESH_TOKEN_TTL_DAYS: joi.number().default(2),
+    PACKAGE_NAME: joi
+      .string()
+      .default(process.env.npm_package_name || 'logistics-api'),
+  })
+  .unknown(true);
 
-const { value, error } = envsSchema.validate(process.env);
-const envsConfig: IEnvConfig = value;
+const validationResult = envsSchema.validate(process.env);
+const envsConfig = validationResult.value as IEnvConfig;
 
-if (error) {
-  if (error) {
-    throw new Error(
-      `Config validation error: ${error.details
-        .map((detail) => detail.message)
-        .join(', ')}`,
-    );
-  }
+if (validationResult.error) {
+  throw new Error(
+    `Config validation error: ${validationResult.error.details
+      .map((detail) => detail.message)
+      .join(', ')}`,
+  );
 }
 export const envs = {
   port: envsConfig.PORT,
   node_env: envsConfig.NODE_ENV,
   package_name: envsConfig.PACKAGE_NAME,
   db: {
-    url: envsConfig.MONGO_URI
+    url: envsConfig.MONGO_URI,
   },
   jwt: {
     access_secret: envsConfig.JWT_ACCESS_SECRET,
@@ -66,4 +66,3 @@ export const envs = {
   block_duration_minutes: envsConfig.BLOCK_DURATION_MINUTES,
   refresh_token_ttl_days: envsConfig.REFRESH_TOKEN_TTL_DAYS,
 };
-
