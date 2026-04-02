@@ -7,7 +7,7 @@ import { HydratedDocument, Types } from 'mongoose';
   collection: 'auth',
 })
 export class Auth {
-  @Prop({ type: Types.ObjectId, ref: "User", required: true, unique: true })
+  @Prop({ type: Types.ObjectId, ref: 'User', required: true, unique: true })
   userId: Types.ObjectId;
 
   @Prop({ required: true, select: false })

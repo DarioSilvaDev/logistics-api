@@ -3,10 +3,10 @@ import { envs } from './config/envs.config';
 
 @Injectable()
 export class AppService {
-  getStatus(): {status: string, apiName: string} {
+  getStatus(): { status: string; apiName: string } {
     return {
-      status: "ONLINE",
-      apiName: envs.package_name 
+      status: 'ONLINE',
+      apiName: envs.package_name,
     };
   }
 }
