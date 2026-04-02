@@ -6,6 +6,7 @@ import { envs } from './config/envs.config';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TrucksModule } from './modules/trucks/trucks.module';
+import { LocationsModule } from './modules/locations/locations.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { TrucksModule } from './modules/trucks/trucks.module';
     UsersModule,
     AuthModule,
     TrucksModule,
+    LocationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

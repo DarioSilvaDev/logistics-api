@@ -1,1 +1,1 @@
-export const TRUCK_REPOSITORY = 'TRUCK_REPOSITORY';
+export const TRUCK_REPOSITORY = Symbol('TRUCK_REPOSITORY');
