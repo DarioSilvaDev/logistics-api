@@ -29,9 +29,11 @@ export class TruckRepository implements ITruckRepository {
   ): Promise<PaginatedQueryResult<TruckDocument>> {
     const query: {
       createdBy: string;
+      deletedAt: null;
       status?: TruckStatus;
     } = {
       createdBy: input.userId,
+      deletedAt: null,
     };
 
     if (input.status) {
@@ -55,7 +57,9 @@ export class TruckRepository implements ITruckRepository {
     id: string,
     userId: string,
   ): Promise<TruckDocument | null> {
-    return this.truckModel.findOne({ _id: id, createdBy: userId }).exec();
+    return this.truckModel
+      .findOne({ _id: id, createdBy: userId, deletedAt: null })
+      .exec();
   }
 
   async updateStatus(
@@ -65,9 +69,27 @@ export class TruckRepository implements ITruckRepository {
   ): Promise<TruckDocument | null> {
     return this.truckModel
       .findOneAndUpdate(
-        { _id: id, createdBy: userId },
+        { _id: id, createdBy: userId, deletedAt: null },
         {
           $set: { status },
+        },
+        { new: true },
+      )
+      .exec();
+  }
+
+  async softDeleteByIdAndOwner(
+    id: string,
+    userId: string,
+  ): Promise<TruckDocument | null> {
+    return this.truckModel
+      .findOneAndUpdate(
+        { _id: id, createdBy: userId, deletedAt: null },
+        {
+          $set: {
+            deletedAt: new Date(),
+            status: TruckStatus.INACTIVE,
+          },
         },
         { new: true },
       )

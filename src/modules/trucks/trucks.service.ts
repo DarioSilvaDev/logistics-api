@@ -14,6 +14,8 @@ import type { PaginatedResponse } from '../../common/interfaces/pagination.inter
 import { CreateTruckDto } from './dto/create-truck.dto';
 import { FindTrucksQueryDto } from './dto/find-trucks-query.dto';
 import { UpdateTruckStatusDto } from './dto/update-truck-status.dto';
+import { ORDER_REPOSITORY } from '../orders/repositories/order.repository.token';
+import type { IOrderRepository } from '../orders/repositories/order.repository.interface';
 import { TRUCK_REPOSITORY } from './repositories/truck.repository.token';
 import type { ITruckRepository } from './repositories/truck.repository.interface';
 import { TruckDocument, TruckStatus } from './schemas/truck.schema';
@@ -34,6 +36,8 @@ export class TrucksService {
   constructor(
     @Inject(TRUCK_REPOSITORY)
     private readonly truckRepository: ITruckRepository,
+    @Inject(ORDER_REPOSITORY)
+    private readonly orderRepository: IOrderRepository,
   ) {}
 
   /**
@@ -145,6 +149,37 @@ export class TrucksService {
     }
 
     return this.mapTruck(truck);
+  }
+
+  /**
+   * Soft deletes a truck owned by the authenticated user.
+   * @param userId ID of the authenticated owner.
+   * @param truckId ID of the truck to remove.
+   * @throws BadRequestException if truck id is invalid.
+   * @throws NotFoundException if truck does not exist for the user.
+   * @throws ConflictException if truck has active orders.
+   * @returns Promise that resolves when truck is soft deleted.
+   */
+  async remove(userId: string, truckId: string): Promise<void> {
+    this.assertValidObjectId(truckId);
+
+    const truck = await this.truckRepository.findByIdAndOwner(truckId, userId);
+    if (!truck) {
+      throw new NotFoundException('Truck not found');
+    }
+
+    const activeOrder = await this.orderRepository.findActiveByTruck(truckId);
+    if (activeOrder) {
+      throw new ConflictException('Truck has active orders');
+    }
+
+    const deletedTruck = await this.truckRepository.softDeleteByIdAndOwner(
+      truckId,
+      userId,
+    );
+    if (!deletedTruck) {
+      throw new NotFoundException('Truck not found');
+    }
   }
 
   /**
