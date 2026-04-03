@@ -3,6 +3,7 @@ import { HydratedDocument, Types } from 'mongoose';
 
 export enum TruckStatus {
   AVAILABLE = 'AVAILABLE',
+  UNAVAILABLE = 'UNAVAILABLE',
   IN_MAINTENANCE = 'IN_MAINTENANCE',
   INACTIVE = 'INACTIVE',
 }
