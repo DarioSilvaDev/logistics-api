@@ -7,6 +7,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { TrucksModule } from './modules/trucks/trucks.module';
 import { LocationsModule } from './modules/locations/locations.module';
+import { OrdersModule } from './modules/orders/orders.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { LocationsModule } from './modules/locations/locations.module';
     AuthModule,
     TrucksModule,
     LocationsModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
