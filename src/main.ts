@@ -24,7 +24,7 @@ async function bootstrap() {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('Logistics API')
-    .setDescription('Documentacion OpenAPI para los dominios de la API.')
+    .setDescription('OpenAPI documentation for the API domains.')
     .setVersion('1.0.0')
     .addBearerAuth()
     .build();

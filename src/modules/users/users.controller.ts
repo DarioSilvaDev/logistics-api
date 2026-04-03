@@ -14,7 +14,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 @ApiTags('Users')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
-  description: 'Token de acceso invalido o ausente.',
+  description: 'Invalid or missing access token.',
   schema: {
     example: {
       statusCode: 401,
@@ -29,9 +29,9 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @ApiOperation({ summary: 'Obtener perfil del usuario autenticado' })
+  @ApiOperation({ summary: 'Get authenticated user profile' })
   @ApiOkResponse({
-    description: 'Perfil del usuario obtenido exitosamente.',
+    description: 'User profile retrieved successfully.',
     schema: {
       example: {
         id: '6605e6c1f2f5f9f7d2f1a123',
@@ -42,7 +42,7 @@ export class UsersController {
     },
   })
   @ApiNotFoundResponse({
-    description: 'Usuario no encontrado.',
+    description: 'User not found.',
     schema: {
       example: {
         statusCode: 404,
