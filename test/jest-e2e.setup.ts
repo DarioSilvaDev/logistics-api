@@ -1,0 +1,13 @@
+process.env.PORT = process.env.PORT ?? '3001';
+process.env.NODE_ENV = process.env.NODE_ENV ?? 'test';
+process.env.MONGO_URI = process.env.MONGO_URI ?? 'mongodb://127.0.0.1:27017/logistics-api-test';
+process.env.GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY ?? 'test-google-api-key';
+process.env.JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET ?? 'test-access-secret';
+process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET ?? 'test-refresh-secret';
+process.env.JWT_ACCESS_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES_IN ?? '15m';
+process.env.JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN ?? '7d';
+process.env.BCRYPT_SALT_ROUNDS = process.env.BCRYPT_SALT_ROUNDS ?? '10';
+process.env.MAX_LOGIN_ATTEMPTS = process.env.MAX_LOGIN_ATTEMPTS ?? '5';
+process.env.BLOCK_DURATION_MINUTES = process.env.BLOCK_DURATION_MINUTES ?? '15';
+process.env.REFRESH_TOKEN_TTL_DAYS = process.env.REFRESH_TOKEN_TTL_DAYS ?? '7';
+process.env.PACKAGE_NAME = process.env.PACKAGE_NAME ?? 'logistics-api-test';
