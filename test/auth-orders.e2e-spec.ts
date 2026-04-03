@@ -53,6 +53,7 @@ interface TruckRecord {
   status: TruckStatus;
   createdBy: string;
   createdAt: Date;
+  deletedAt: Date | null;
 }
 
 interface LocationRecord {
@@ -294,6 +295,7 @@ class InMemoryTruckRepository {
       status: input.status,
       createdBy: input.createdBy,
       createdAt: new Date(),
+      deletedAt: null,
     };
 
     this.trucks.set(record.id, record);
@@ -318,6 +320,7 @@ class InMemoryTruckRepository {
       .filter(
         (truck) =>
           truck.createdBy === input.userId &&
+          truck.deletedAt === null &&
           (!input.status || truck.status === input.status),
       )
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
@@ -335,7 +338,7 @@ class InMemoryTruckRepository {
 
   async findByIdAndOwner(id: string, userId: string): Promise<any | null> {
     const record = this.trucks.get(id);
-    if (!record || record.createdBy !== userId) {
+    if (!record || record.createdBy !== userId || record.deletedAt !== null) {
       return null;
     }
 
@@ -348,11 +351,23 @@ class InMemoryTruckRepository {
     status: TruckStatus,
   ): Promise<any | null> {
     const record = this.trucks.get(id);
-    if (!record || record.createdBy !== userId) {
+    if (!record || record.createdBy !== userId || record.deletedAt !== null) {
       return null;
     }
 
     record.status = status;
+    return this.toDocument(record);
+  }
+
+  async softDeleteByIdAndOwner(id: string, userId: string): Promise<any | null> {
+    const record = this.trucks.get(id);
+    if (!record || record.createdBy !== userId || record.deletedAt !== null) {
+      return null;
+    }
+
+    record.deletedAt = new Date();
+    record.status = TruckStatus.INACTIVE;
+
     return this.toDocument(record);
   }
 
@@ -367,6 +382,7 @@ class InMemoryTruckRepository {
       status: record.status,
       createdBy: toObjectId(record.createdBy),
       createdAt: record.createdAt,
+      deletedAt: record.deletedAt,
     };
   }
 }
@@ -832,6 +848,30 @@ describe('Auth + Orders (e2e)', () => {
     expect(listResponse.body.total).toBe(1);
     expect(listResponse.body.items[0].id).toBe(createOrderResponse.body.id);
     expect(listResponse.body.items[0].status).toBe(OrderStatus.ASSIGNED);
+  });
+
+  it('returns 409 when deleting a truck with active orders', async () => {
+    const { accessToken } = await registerAndLogin();
+    const { truckId, pickupId, dropoffId } = await createTruckAndLocations(
+      accessToken,
+    );
+
+    await request(app.getHttpServer())
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({
+        truckId,
+        pickupId,
+        dropoffId,
+      })
+      .expect(201);
+
+    const deleteTruckResponse = await request(app.getHttpServer())
+      .delete(`/api/trucks/${truckId}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(409);
+
+    expect(deleteTruckResponse.body.message).toBe('Truck has active orders');
   });
 
   it('returns 409 for invalid transition from CREATED to DELIVERED', async () => {
