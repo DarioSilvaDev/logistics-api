@@ -21,9 +21,9 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
-  @ApiOperation({ summary: 'Registrar un usuario' })
+  @ApiOperation({ summary: 'Register user' })
   @ApiCreatedResponse({
-    description: 'Usuario registrado exitosamente.',
+    description: 'User registered successfully.',
     schema: {
       example: {
         user: {
@@ -36,7 +36,7 @@ export class AuthController {
     },
   })
   @ApiBadRequestResponse({
-    description: 'Payload invalido.',
+    description: 'Invalid payload.',
     schema: {
       example: {
         statusCode: 400,
@@ -48,7 +48,7 @@ export class AuthController {
     },
   })
   @ApiConflictResponse({
-    description: 'El email ya se encuentra registrado.',
+    description: 'Email is already registered.',
     schema: {
       example: {
         statusCode: 409,
@@ -64,9 +64,9 @@ export class AuthController {
     return this.authService.register(dto);
   }
 
-  @ApiOperation({ summary: 'Iniciar sesion' })
+  @ApiOperation({ summary: 'Log in' })
   @ApiCreatedResponse({
-    description: 'Sesion iniciada exitosamente.',
+    description: 'Logged in successfully.',
     schema: {
       example: {
         user: {
@@ -81,7 +81,7 @@ export class AuthController {
     },
   })
   @ApiBadRequestResponse({
-    description: 'Payload invalido.',
+    description: 'Invalid payload.',
     schema: {
       example: {
         statusCode: 400,
@@ -93,7 +93,7 @@ export class AuthController {
     },
   })
   @ApiUnauthorizedResponse({
-    description: 'Credenciales invalidas.',
+    description: 'Invalid credentials.',
     schema: {
       example: {
         statusCode: 401,
@@ -105,7 +105,7 @@ export class AuthController {
     },
   })
   @ApiTooManyRequestsResponse({
-    description: 'Cuenta bloqueada temporalmente por intentos fallidos.',
+    description: 'Account temporarily locked due to failed attempts.',
     schema: {
       example: {
         statusCode: 429,
@@ -121,9 +121,9 @@ export class AuthController {
     return this.authService.login(dto);
   }
 
-  @ApiOperation({ summary: 'Refrescar tokens de sesion' })
+  @ApiOperation({ summary: 'Refresh session tokens' })
   @ApiCreatedResponse({
-    description: 'Tokens renovados exitosamente.',
+    description: 'Tokens refreshed successfully.',
     schema: {
       example: {
         user: {
@@ -138,7 +138,7 @@ export class AuthController {
     },
   })
   @ApiBadRequestResponse({
-    description: 'Payload invalido.',
+    description: 'Invalid payload.',
     schema: {
       example: {
         statusCode: 400,
@@ -150,7 +150,7 @@ export class AuthController {
     },
   })
   @ApiUnauthorizedResponse({
-    description: 'Refresh token invalido o expirado.',
+    description: 'Invalid or expired refresh token.',
     schema: {
       example: {
         statusCode: 401,
@@ -166,10 +166,10 @@ export class AuthController {
     return this.authService.refreshToken(dto);
   }
 
-  @ApiOperation({ summary: 'Cerrar sesion' })
+  @ApiOperation({ summary: 'Log out' })
   @ApiBearerAuth()
   @ApiCreatedResponse({
-    description: 'Sesion cerrada exitosamente.',
+    description: 'Logged out successfully.',
     schema: {
       example: {
         message: 'Logged out successfully',
@@ -177,7 +177,7 @@ export class AuthController {
     },
   })
   @ApiUnauthorizedResponse({
-    description: 'Token de acceso invalido o ausente.',
+    description: 'Invalid or missing access token.',
     schema: {
       example: {
         statusCode: 401,

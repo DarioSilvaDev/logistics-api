@@ -6,7 +6,7 @@ export class UpdateTruckStatusDto {
   @ApiProperty({
     enum: TruckStatus,
     example: TruckStatus.IN_MAINTENANCE,
-    description: 'Nuevo estado del truck.',
+    description: 'New truck status.',
   })
   @IsEnum(TruckStatus)
   status: TruckStatus;

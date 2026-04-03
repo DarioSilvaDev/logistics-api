@@ -7,9 +7,9 @@ import { AppService } from './app.service';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  @ApiOperation({ summary: 'Estado de la API' })
+  @ApiOperation({ summary: 'API status' })
   @ApiOkResponse({
-    description: 'Estado actual de la API.',
+    description: 'Current API status.',
     schema: {
       example: {
         status: 'ONLINE',

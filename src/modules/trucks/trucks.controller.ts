@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -18,13 +19,14 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { CreateTruckDto } from './dto/create-truck.dto';
+import { FindTrucksQueryDto } from './dto/find-trucks-query.dto';
 import { UpdateTruckStatusDto } from './dto/update-truck-status.dto';
 import { TrucksService } from './trucks.service';
 
 @ApiTags('Trucks')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
-  description: 'Token de acceso invalido o ausente.',
+  description: 'Invalid or missing access token.',
   schema: {
     example: {
       statusCode: 401,
@@ -40,16 +42,16 @@ import { TrucksService } from './trucks.service';
 export class TrucksController {
   constructor(private readonly trucksService: TrucksService) {}
 
-  @ApiOperation({ summary: 'Crear un truck' })
+  @ApiOperation({ summary: 'Create truck' })
   @ApiResponse({
     status: 201,
-    description: 'Truck creado exitosamente.',
+    description: 'Truck created successfully.',
     schema: {
       example: {
         id: '6605e6c1f2f5f9f7d2f1a555',
         plate: 'ABC123',
         model: 'Volvo FH16',
-        color: 'Azul',
+        color: 'Blue',
         year: '2024',
         capacityKg: 24000,
         status: 'AVAILABLE',
@@ -59,7 +61,7 @@ export class TrucksController {
   })
   @ApiResponse({
     status: 409,
-    description: 'La placa ya existe.',
+    description: 'Truck plate already exists.',
     schema: {
       example: {
         statusCode: 409,
@@ -71,7 +73,7 @@ export class TrucksController {
     },
   })
   @ApiBadRequestResponse({
-    description: 'Payload invalido.',
+    description: 'Invalid payload.',
     schema: {
       example: {
         statusCode: 400,
@@ -90,41 +92,51 @@ export class TrucksController {
     return this.trucksService.create(userId, dto);
   }
 
-  @ApiOperation({ summary: 'Listar trucks del usuario autenticado' })
+  @ApiOperation({ summary: 'List authenticated user trucks' })
   @ApiResponse({
     status: 200,
-    description: 'Listado de trucks obtenido.',
+    description: 'Trucks list retrieved successfully.',
     schema: {
-      type: 'array',
-      example: [
-        {
-          id: '6605e6c1f2f5f9f7d2f1a555',
-          plate: 'ABC123',
-          model: 'Volvo FH16',
-          color: 'Azul',
-          year: '2024',
-          capacityKg: 24000,
-          status: 'AVAILABLE',
-          createdBy: '6605e6c1f2f5f9f7d2f1a123',
-        },
-      ],
+      example: {
+        items: [
+          {
+            id: '6605e6c1f2f5f9f7d2f1a555',
+            plate: 'ABC123',
+            model: 'Volvo FH16',
+            color: 'Blue',
+            year: '2024',
+            capacityKg: 24000,
+            status: 'AVAILABLE',
+            createdBy: '6605e6c1f2f5f9f7d2f1a123',
+          },
+        ],
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
     },
   })
   @Get()
-  findAll(@CurrentUser('userId') userId: string) {
-    return this.trucksService.findAll(userId);
+  findAll(
+    @CurrentUser('userId') userId: string,
+    @Query() query: FindTrucksQueryDto,
+  ) {
+    return this.trucksService.findAll(userId, query);
   }
 
-  @ApiOperation({ summary: 'Obtener truck por id' })
+  @ApiOperation({ summary: 'Get truck by id' })
   @ApiResponse({
     status: 200,
-    description: 'Truck obtenido exitosamente.',
+    description: 'Truck retrieved successfully.',
     schema: {
       example: {
         id: '6605e6c1f2f5f9f7d2f1a555',
         plate: 'ABC123',
         model: 'Volvo FH16',
-        color: 'Azul',
+        color: 'Blue',
         year: '2024',
         capacityKg: 24000,
         status: 'AVAILABLE',
@@ -134,7 +146,7 @@ export class TrucksController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Truck no encontrado.',
+    description: 'Truck not found.',
     schema: {
       example: {
         statusCode: 404,
@@ -146,7 +158,7 @@ export class TrucksController {
     },
   })
   @ApiBadRequestResponse({
-    description: 'Id de truck invalido.',
+    description: 'Invalid truck id.',
     schema: {
       example: {
         statusCode: 400,
@@ -165,16 +177,16 @@ export class TrucksController {
     return this.trucksService.findById(userId, truckId);
   }
 
-  @ApiOperation({ summary: 'Actualizar estado de truck' })
+  @ApiOperation({ summary: 'Update truck status' })
   @ApiResponse({
     status: 200,
-    description: 'Estado actualizado exitosamente.',
+    description: 'Status updated successfully.',
     schema: {
       example: {
         id: '6605e6c1f2f5f9f7d2f1a555',
         plate: 'ABC123',
         model: 'Volvo FH16',
-        color: 'Azul',
+        color: 'Blue',
         year: '2024',
         capacityKg: 24000,
         status: 'IN_MAINTENANCE',
@@ -184,7 +196,7 @@ export class TrucksController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Truck no encontrado.',
+    description: 'Truck not found.',
     schema: {
       example: {
         statusCode: 404,
@@ -196,12 +208,12 @@ export class TrucksController {
     },
   })
   @ApiBadRequestResponse({
-    description: 'Payload o id de truck invalido.',
+    description: 'Invalid payload or truck id.',
     schema: {
       example: {
         statusCode: 400,
         message: [
-          'status must be one of the following values: AVAILABLE, IN_MAINTENANCE, INACTIVE',
+          'status must be one of the following values: AVAILABLE, UNAVAILABLE, IN_MAINTENANCE, INACTIVE',
         ],
         path: '/api/trucks/invalid-id/status',
         timestamp: '2026-04-01T12:00:00.000Z',

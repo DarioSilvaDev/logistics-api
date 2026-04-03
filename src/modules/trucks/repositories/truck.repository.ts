@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import type { PaginatedQueryResult } from '../../../common/interfaces/pagination.interface';
 import {
   CreateTruckRepositoryInput,
+  FindTrucksByOwnerRepositoryInput,
   ITruckRepository,
 } from './truck.repository.interface';
 import { Truck, TruckDocument, TruckStatus } from '../schemas/truck.schema';
@@ -22,11 +24,31 @@ export class TruckRepository implements ITruckRepository {
     return this.truckModel.findOne({ plate }).exec();
   }
 
-  async findAllByOwner(userId: string): Promise<TruckDocument[]> {
-    return this.truckModel
-      .find({ createdBy: userId })
-      .sort({ createdAt: -1 })
-      .exec();
+  async findAllByOwner(
+    input: FindTrucksByOwnerRepositoryInput,
+  ): Promise<PaginatedQueryResult<TruckDocument>> {
+    const query: {
+      createdBy: string;
+      status?: TruckStatus;
+    } = {
+      createdBy: input.userId,
+    };
+
+    if (input.status) {
+      query.status = input.status;
+    }
+
+    const [items, total] = await Promise.all([
+      this.truckModel
+        .find(query)
+        .sort({ createdAt: -1 })
+        .skip((input.page - 1) * input.limit)
+        .limit(input.limit)
+        .exec(),
+      this.truckModel.countDocuments(query).exec(),
+    ]);
+
+    return { items, total };
   }
 
   async findByIdAndOwner(

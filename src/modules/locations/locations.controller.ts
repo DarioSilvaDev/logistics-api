@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -26,13 +27,14 @@ import {
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateLocationDto } from './dto/create-location.dto';
+import { FindLocationsQueryDto } from './dto/find-locations-query.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { LocationsService } from './locations.service';
 
 @ApiTags('Locations')
 @ApiBearerAuth()
 @ApiUnauthorizedResponse({
-  description: 'Token de acceso invalido o ausente.',
+  description: 'Invalid or missing access token.',
   schema: {
     example: {
       statusCode: 401,
@@ -48,14 +50,14 @@ import { LocationsService } from './locations.service';
 export class LocationsController {
   constructor(private readonly locationsService: LocationsService) {}
 
-  @ApiOperation({ summary: 'Crear una location' })
+  @ApiOperation({ summary: 'Create location' })
   @ApiCreatedResponse({
-    description: 'Location creada exitosamente.',
+    description: 'Location created successfully.',
     schema: {
       example: {
         id: '6608b021fb1e47461d7f2222',
-        name: 'Centro de Distribucion Norte',
-        address: 'Av. Corrientes 1234, CABA, Argentina',
+        name: 'North Distribution Center',
+        address: '1234 Main St, Austin, TX, USA',
         place_id: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
         latitude: -34.6037,
         longitude: -58.3816,
@@ -63,7 +65,7 @@ export class LocationsController {
     },
   })
   @ApiConflictResponse({
-    description: 'La location ya existe para el usuario autenticado.',
+    description: 'Location already exists for authenticated user.',
     schema: {
       example: {
         statusCode: 409,
@@ -75,7 +77,7 @@ export class LocationsController {
     },
   })
   @ApiBadRequestResponse({
-    description: 'Payload invalido.',
+    description: 'Invalid payload.',
     schema: {
       example: {
         statusCode: 400,
@@ -87,7 +89,7 @@ export class LocationsController {
     },
   })
   @ApiBadGatewayResponse({
-    description: 'Error al consultar Google Places.',
+    description: 'Error while calling Google Places.',
     schema: {
       example: {
         statusCode: 502,
@@ -106,36 +108,46 @@ export class LocationsController {
     return this.locationsService.create(userId, dto);
   }
 
-  @ApiOperation({ summary: 'Listar locations del usuario autenticado' })
+  @ApiOperation({ summary: 'List authenticated user locations' })
   @ApiOkResponse({
-    description: 'Listado de locations obtenido.',
+    description: 'Locations list retrieved successfully.',
     schema: {
-      type: 'array',
-      example: [
-        {
-          id: '6608b021fb1e47461d7f2222',
-          name: 'Centro de Distribucion Norte',
-          address: 'Av. Corrientes 1234, CABA, Argentina',
-          place_id: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
-          latitude: -34.6037,
-          longitude: -58.3816,
-        },
-      ],
+      example: {
+        items: [
+          {
+            id: '6608b021fb1e47461d7f2222',
+            name: 'North Distribution Center',
+            address: '1234 Main St, Austin, TX, USA',
+            place_id: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
+            latitude: -34.6037,
+            longitude: -58.3816,
+          },
+        ],
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
     },
   })
   @Get()
-  findAll(@CurrentUser('userId') userId: string) {
-    return this.locationsService.findAll(userId);
+  findAll(
+    @CurrentUser('userId') userId: string,
+    @Query() query: FindLocationsQueryDto,
+  ) {
+    return this.locationsService.findAll(userId, query);
   }
 
-  @ApiOperation({ summary: 'Obtener location por id' })
+  @ApiOperation({ summary: 'Get location by id' })
   @ApiOkResponse({
-    description: 'Location obtenida exitosamente.',
+    description: 'Location retrieved successfully.',
     schema: {
       example: {
         id: '6608b021fb1e47461d7f2222',
-        name: 'Centro de Distribucion Norte',
-        address: 'Av. Corrientes 1234, CABA, Argentina',
+        name: 'North Distribution Center',
+        address: '1234 Main St, Austin, TX, USA',
         place_id: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
         latitude: -34.6037,
         longitude: -58.3816,
@@ -143,7 +155,7 @@ export class LocationsController {
     },
   })
   @ApiNotFoundResponse({
-    description: 'Location no encontrada.',
+    description: 'Location not found.',
     schema: {
       example: {
         statusCode: 404,
@@ -155,7 +167,7 @@ export class LocationsController {
     },
   })
   @ApiBadRequestResponse({
-    description: 'Id de location invalido.',
+    description: 'Invalid location id.',
     schema: {
       example: {
         statusCode: 400,
@@ -174,14 +186,14 @@ export class LocationsController {
     return this.locationsService.findById(userId, locationId);
   }
 
-  @ApiOperation({ summary: 'Actualizar nombre de location por id' })
+  @ApiOperation({ summary: 'Update location name by id' })
   @ApiOkResponse({
-    description: 'Location actualizada exitosamente.',
+    description: 'Location updated successfully.',
     schema: {
       example: {
         id: '6608b021fb1e47461d7f2222',
-        name: 'Centro de Distribucion Norte II',
-        address: 'Av. Corrientes 1234, CABA, Argentina',
+        name: 'North Distribution Center II',
+        address: '1234 Main St, Austin, TX, USA',
         place_id: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
         latitude: -34.6037,
         longitude: -58.3816,
@@ -189,7 +201,7 @@ export class LocationsController {
     },
   })
   @ApiNotFoundResponse({
-    description: 'Location no encontrada.',
+    description: 'Location not found.',
     schema: {
       example: {
         statusCode: 404,
@@ -201,7 +213,7 @@ export class LocationsController {
     },
   })
   @ApiBadRequestResponse({
-    description: 'Payload o id de location invalido.',
+    description: 'Invalid payload or location id.',
     schema: {
       example: {
         statusCode: 400,
@@ -221,10 +233,10 @@ export class LocationsController {
     return this.locationsService.updateName(userId, locationId, dto);
   }
 
-  @ApiOperation({ summary: 'Eliminar location por id' })
-  @ApiNoContentResponse({ description: 'Location eliminada exitosamente.' })
+  @ApiOperation({ summary: 'Delete location by id' })
+  @ApiNoContentResponse({ description: 'Location deleted successfully.' })
   @ApiNotFoundResponse({
-    description: 'Location no encontrada.',
+    description: 'Location not found.',
     schema: {
       example: {
         statusCode: 404,
@@ -236,7 +248,7 @@ export class LocationsController {
     },
   })
   @ApiBadRequestResponse({
-    description: 'Id de location invalido.',
+    description: 'Invalid location id.',
     schema: {
       example: {
         statusCode: 400,

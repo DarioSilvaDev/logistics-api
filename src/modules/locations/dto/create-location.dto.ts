@@ -3,10 +3,10 @@ import { IsString, MaxLength, MinLength } from 'class-validator';
 
 export class CreateLocationDto {
   @ApiProperty({
-    example: 'Centro de Distribucion Norte',
+    example: 'North Distribution Center',
     minLength: 1,
     maxLength: 120,
-    description: 'Nombre referencial de la ubicacion.',
+    description: 'Reference name for the location.',
   })
   @IsString()
   @MinLength(1)
@@ -17,7 +17,7 @@ export class CreateLocationDto {
     example: 'ChIJN1t_tDeuEmsRUsoyG83frY4',
     minLength: 1,
     maxLength: 255,
-    description: 'Identificador global de Google Places.',
+    description: 'Global Google Places identifier.',
   })
   @IsString()
   @MinLength(1)

@@ -1,3 +1,4 @@
+import type { PaginatedQueryResult } from '../../../common/interfaces/pagination.interface';
 import { LocationDocument } from '../schemas/location.schema';
 
 export interface CreateLocationRepositoryInput {
@@ -9,13 +10,22 @@ export interface CreateLocationRepositoryInput {
   longitude: number;
 }
 
+export interface FindLocationsByOwnerRepositoryInput {
+  userId: string;
+  page: number;
+  limit: number;
+  name?: string;
+}
+
 export interface ILocationRepository {
   create(input: CreateLocationRepositoryInput): Promise<LocationDocument>;
   findByPlaceIdAndOwner(
     placeId: string,
     userId: string,
   ): Promise<LocationDocument | null>;
-  findAllByOwner(userId: string): Promise<LocationDocument[]>;
+  findAllByOwner(
+    input: FindLocationsByOwnerRepositoryInput,
+  ): Promise<PaginatedQueryResult<LocationDocument>>;
   findByIdAndOwner(
     id: string,
     userId: string,

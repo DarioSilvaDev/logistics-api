@@ -16,7 +16,7 @@ export class CreateTruckDto {
     example: 'ABC123',
     minLength: 1,
     maxLength: 20,
-    description: 'Placa unica del truck.',
+    description: 'Unique truck plate.',
   })
   @IsString()
   @MinLength(1)
@@ -27,7 +27,7 @@ export class CreateTruckDto {
     example: 'Volvo FH16',
     minLength: 1,
     maxLength: 120,
-    description: 'Modelo comercial del truck.',
+    description: 'Commercial truck model.',
   })
   @IsString()
   @MinLength(1)
@@ -35,10 +35,10 @@ export class CreateTruckDto {
   model: string;
 
   @ApiProperty({
-    example: 'Azul',
+    example: 'Blue',
     minLength: 1,
     maxLength: 50,
-    description: 'Color del truck.',
+    description: 'Truck color.',
   })
   @IsString()
   @MinLength(1)
@@ -49,7 +49,7 @@ export class CreateTruckDto {
     example: '2024',
     minLength: 4,
     maxLength: 4,
-    description: 'Año del truck en formato de 4 digitos.',
+    description: 'Truck year in 4-digit format.',
   })
   @IsString()
   @Matches(/^\d{4}$/)
@@ -58,7 +58,7 @@ export class CreateTruckDto {
   @ApiPropertyOptional({
     example: 24000,
     minimum: 0,
-    description: 'Capacidad de carga en kilogramos.',
+    description: 'Load capacity in kilograms.',
   })
   @IsOptional()
   @IsNumber()
@@ -68,7 +68,7 @@ export class CreateTruckDto {
   @ApiPropertyOptional({
     enum: TruckStatus,
     default: TruckStatus.AVAILABLE,
-    description: 'Estado inicial del truck.',
+    description: 'Initial truck status.',
   })
   @IsOptional()
   @IsEnum(TruckStatus)

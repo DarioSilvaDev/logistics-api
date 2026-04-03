@@ -3,10 +3,10 @@ import { IsString, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateLocationDto {
   @ApiProperty({
-    example: 'Centro de Distribucion Norte II',
+    example: 'North Distribution Center II',
     minLength: 1,
     maxLength: 120,
-    description: 'Nombre referencial actualizado de la ubicacion.',
+    description: 'Updated reference name for the location.',
   })
   @IsString()
   @MinLength(1)

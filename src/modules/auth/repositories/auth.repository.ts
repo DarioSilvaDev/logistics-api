@@ -39,23 +39,33 @@ export class AuthRepository implements IAuthRepository {
     userId: string,
     blockDurationMinutes: number,
   ): Promise<AuthDocument | null> {
-    const auth = await this.authModel.findOne({ userId }).exec();
+    const blockDurationMs = blockDurationMinutes * 60 * 1000;
 
-    if (!auth) {
-      return null;
-    }
-
-    auth.loginAttempts += 1;
-
-    if (auth.loginAttempts >= auth.maxLoginAttempts) {
-      auth.isBlocked = true;
-      auth.blockedUntil = new Date(
-        Date.now() + blockDurationMinutes * 60 * 1000,
-      );
-    }
-
-    await auth.save();
-    return auth;
+    return this.authModel
+      .findOneAndUpdate(
+        { userId },
+        [
+          {
+            $set: {
+              loginAttempts: { $add: ['$loginAttempts', 1] },
+            },
+          },
+          {
+            $set: {
+              isBlocked: { $gte: ['$loginAttempts', '$maxLoginAttempts'] },
+              blockedUntil: {
+                $cond: [
+                  { $gte: ['$loginAttempts', '$maxLoginAttempts'] },
+                  { $add: ['$$NOW', blockDurationMs] },
+                  '$blockedUntil',
+                ],
+              },
+            },
+          },
+        ],
+        { returnDocument: 'after' },
+      )
+      .exec();
   }
 
   async resetLoginAttempts(userId: string): Promise<AuthDocument | null> {
