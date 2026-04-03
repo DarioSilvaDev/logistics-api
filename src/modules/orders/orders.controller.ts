@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -21,6 +22,7 @@ import {
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { FindOrdersQueryDto } from './dto/find-orders-query.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { OrdersService } from './orders.service';
 
@@ -108,32 +110,42 @@ export class OrdersController {
   @ApiOkResponse({
     description: 'Orders list obtained.',
     schema: {
-      type: 'array',
-      example: [
-        {
-          id: '6610f3f6fb1e47461d7f7001',
-          truckId: '6605e6c1f2f5f9f7d2f1a555',
-          pickupId: '6608b021fb1e47461d7f2222',
-          dropoffId: '6608b021fb1e47461d7f3333',
-          status: 'ASSIGNED',
-          createdBy: '6605e6c1f2f5f9f7d2f1a123',
-          statusHistory: [
-            {
-              status: 'CREATED',
-              changedAt: '2026-04-02T12:00:00.000Z',
-            },
-            {
-              status: 'ASSIGNED',
-              changedAt: '2026-04-02T12:03:00.000Z',
-            },
-          ],
-        },
-      ],
+      example: {
+        items: [
+          {
+            id: '6610f3f6fb1e47461d7f7001',
+            truckId: '6605e6c1f2f5f9f7d2f1a555',
+            pickupId: '6608b021fb1e47461d7f2222',
+            dropoffId: '6608b021fb1e47461d7f3333',
+            status: 'ASSIGNED',
+            createdBy: '6605e6c1f2f5f9f7d2f1a123',
+            statusHistory: [
+              {
+                status: 'CREATED',
+                changedAt: '2026-04-02T12:00:00.000Z',
+              },
+              {
+                status: 'ASSIGNED',
+                changedAt: '2026-04-02T12:03:00.000Z',
+              },
+            ],
+          },
+        ],
+        page: 1,
+        limit: 20,
+        total: 1,
+        totalPages: 1,
+        hasNextPage: false,
+        hasPreviousPage: false,
+      },
     },
   })
   @Get()
-  findAll(@CurrentUser('userId') userId: string) {
-    return this.ordersService.findAll(userId);
+  findAll(
+    @CurrentUser('userId') userId: string,
+    @Query() query: FindOrdersQueryDto,
+  ) {
+    return this.ordersService.findAll(userId, query);
   }
 
   @ApiOperation({ summary: 'Get order by id' })

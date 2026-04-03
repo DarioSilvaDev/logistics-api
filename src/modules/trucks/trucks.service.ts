@@ -6,7 +6,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
+import {
+  DEFAULT_LIMIT,
+  DEFAULT_PAGE,
+} from '../../common/dto/pagination-query.dto';
+import type { PaginatedResponse } from '../../common/interfaces/pagination.interface';
 import { CreateTruckDto } from './dto/create-truck.dto';
+import { FindTrucksQueryDto } from './dto/find-trucks-query.dto';
 import { UpdateTruckStatusDto } from './dto/update-truck-status.dto';
 import { TRUCK_REPOSITORY } from './repositories/truck.repository.token';
 import type { ITruckRepository } from './repositories/truck.repository.interface';
@@ -67,11 +73,32 @@ export class TrucksService {
    * Obtiene todos los trucks pertenecientes a un usuario especifico.
    * @param userId ID del usuario propietario de los trucks a consultar.
    * @throws Error si ocurre una falla en la capa de persistencia.
-   * @returns Lista de trucks pertenecientes al usuario. Si no hay registros, retorna una lista vacia.
+   * @returns Resultado paginado de trucks pertenecientes al usuario.
    */
-  async findAll(userId: string): Promise<TruckResponse[]> {
-    const trucks = await this.truckRepository.findAllByOwner(userId);
-    return trucks.map((truck) => this.mapTruck(truck));
+  async findAll(
+    userId: string,
+    query: FindTrucksQueryDto,
+  ): Promise<PaginatedResponse<TruckResponse>> {
+    const page = query.page ?? DEFAULT_PAGE;
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const result = await this.truckRepository.findAllByOwner({
+      userId,
+      page,
+      limit,
+      status: query.status,
+    });
+
+    const totalPages = Math.max(1, Math.ceil(result.total / limit));
+
+    return {
+      items: result.items.map((truck) => this.mapTruck(truck)),
+      page,
+      limit,
+      total: result.total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    };
   }
   /**
    * Obtiene un truck por su ID si pertenece al usuario especifico.

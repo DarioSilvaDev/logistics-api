@@ -6,12 +6,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
+import {
+  DEFAULT_LIMIT,
+  DEFAULT_PAGE,
+} from '../../common/dto/pagination-query.dto';
+import type { PaginatedResponse } from '../../common/interfaces/pagination.interface';
 import { LOCATION_REPOSITORY } from '../locations/repositories/location.repository.token';
 import type { ILocationRepository } from '../locations/repositories/location.repository.interface';
 import { TRUCK_REPOSITORY } from '../trucks/repositories/truck.repository.token';
 import type { ITruckRepository } from '../trucks/repositories/truck.repository.interface';
 import { TruckDocument, TruckStatus } from '../trucks/schemas/truck.schema';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { FindOrdersQueryDto } from './dto/find-orders-query.dto';
 import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { ORDER_REPOSITORY } from './repositories/order.repository.token';
 import type {
@@ -19,13 +25,6 @@ import type {
   OrderStatusHistoryEntryInput,
 } from './repositories/order.repository.interface';
 import { OrderDocument, OrderStatus } from './schemas/order.schema';
-
-interface CacheEntry<T> {
-  value: T;
-  expiresAt: number;
-}
-
-const ORDER_CACHE_TTL_MS = 30_000;
 
 const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.CREATED]: [OrderStatus.ASSIGNED, OrderStatus.CANCELLED],
@@ -57,15 +56,6 @@ export interface OrderResponse {
 
 @Injectable()
 export class OrdersService {
-  private readonly orderByIdCache = new Map<
-    string,
-    CacheEntry<OrderResponse>
-  >();
-  private readonly ordersByOwnerCache = new Map<
-    string,
-    CacheEntry<OrderResponse[]>
-  >();
-
   constructor(
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: IOrderRepository,
@@ -119,15 +109,9 @@ export class OrdersService {
         statusHistory: [statusHistoryEntry],
       });
 
-      const mappedOrder = this.mapOrder(createdOrder);
-      this.invalidateOwnerCache(userId);
-      this.setCachedValue(
-        this.orderByIdCache,
-        this.buildOrderCacheKey(userId, mappedOrder.id),
-        mappedOrder,
-      );
+      await this.syncTruckStatusWithOrder(userId, truckId, OrderStatus.CREATED);
 
-      return mappedOrder;
+      return this.mapOrder(createdOrder);
     } catch (error: unknown) {
       if (this.isDuplicateKeyError(error)) {
         throw new ConflictException('Truck already has an active order');
@@ -141,28 +125,41 @@ export class OrdersService {
    * Returns all orders owned by an authenticated user.
    * @param userId User identifier that owns the orders.
    * @throws Error if the persistence layer fails while querying data.
-   * @returns List of orders sorted by most recently created.
+   * @returns Paginated list of orders sorted by most recently created.
    */
-  async findAll(userId: string): Promise<OrderResponse[]> {
-    const cachedOrders = this.getCachedValue(this.ordersByOwnerCache, userId);
-    if (cachedOrders) {
-      return cachedOrders;
-    }
+  async findAll(
+    userId: string,
+    query: FindOrdersQueryDto,
+  ): Promise<PaginatedResponse<OrderResponse>> {
+    const page = query.page ?? DEFAULT_PAGE;
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const createdFrom = query.createdFrom
+      ? new Date(query.createdFrom)
+      : undefined;
+    const createdTo = query.createdTo ? new Date(query.createdTo) : undefined;
 
-    const orders = await this.orderRepository.findAllByOwner(userId);
-    const mappedOrders = orders.map((order) => this.mapOrder(order));
+    this.assertValidDateRange(createdFrom, createdTo);
 
-    this.setCachedValue(this.ordersByOwnerCache, userId, mappedOrders);
+    const result = await this.orderRepository.findAllByOwner({
+      userId,
+      page,
+      limit,
+      status: query.status,
+      createdFrom,
+      createdTo,
+    });
 
-    for (const order of mappedOrders) {
-      this.setCachedValue(
-        this.orderByIdCache,
-        this.buildOrderCacheKey(userId, order.id),
-        order,
-      );
-    }
+    const totalPages = Math.max(1, Math.ceil(result.total / limit));
 
-    return mappedOrders;
+    return {
+      items: result.items.map((order) => this.mapOrder(order)),
+      page,
+      limit,
+      total: result.total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    };
   }
 
   /**
@@ -176,20 +173,12 @@ export class OrdersService {
   async findById(userId: string, orderId: string): Promise<OrderResponse> {
     this.assertValidObjectId(orderId, 'order id');
 
-    const cacheKey = this.buildOrderCacheKey(userId, orderId);
-    const cachedOrder = this.getCachedValue(this.orderByIdCache, cacheKey);
-    if (cachedOrder) {
-      return cachedOrder;
-    }
-
     const order = await this.orderRepository.findByIdAndOwner(orderId, userId);
     if (!order) {
       throw new NotFoundException('Order not found');
     }
 
-    const mappedOrder = this.mapOrder(order);
-    this.setCachedValue(this.orderByIdCache, cacheKey, mappedOrder);
-    return mappedOrder;
+    return this.mapOrder(order);
   }
 
   /**
@@ -233,15 +222,13 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    const mappedOrder = this.mapOrder(updatedOrder);
-    this.invalidateOwnerCache(userId);
-    this.setCachedValue(
-      this.orderByIdCache,
-      this.buildOrderCacheKey(userId, orderId),
-      mappedOrder,
+    await this.syncTruckStatusWithOrder(
+      userId,
+      updatedOrder.truckId.toString(),
+      dto.status,
     );
 
-    return mappedOrder;
+    return this.mapOrder(updatedOrder);
   }
 
   /**
@@ -267,6 +254,25 @@ export class OrdersService {
   private assertDifferentLocations(pickupId: string, dropoffId: string): void {
     if (pickupId === dropoffId) {
       throw new BadRequestException('Pickup and dropoff locations must differ');
+    }
+  }
+
+  /**
+   * Ensures date range filters are logically valid.
+   * @param createdFrom Start date filter.
+   * @param createdTo End date filter.
+   * @throws BadRequestException if createdFrom is greater than createdTo.
+   * @returns Nothing; validation only.
+   */
+  private assertValidDateRange(createdFrom?: Date, createdTo?: Date): void {
+    if (
+      createdFrom &&
+      createdTo &&
+      createdFrom.getTime() > createdTo.getTime()
+    ) {
+      throw new BadRequestException(
+        'createdFrom must be before or equal to createdTo',
+      );
     }
   }
 
@@ -342,6 +348,43 @@ export class OrdersService {
   }
 
   /**
+   * Resolves the expected truck status from a given order status.
+   * @param orderStatus Order status to evaluate.
+   * @throws Error no explicit throw; deterministic mapping only.
+   * @returns AVAILABLE for terminal orders, otherwise UNAVAILABLE.
+   */
+  private resolveTruckStatusForOrder(orderStatus: OrderStatus): TruckStatus {
+    return TERMINAL_ORDER_STATUSES.has(orderStatus)
+      ? TruckStatus.AVAILABLE
+      : TruckStatus.UNAVAILABLE;
+  }
+
+  /**
+   * Updates truck availability according to the current order status.
+   * @param userId Authenticated user that owns the truck.
+   * @param truckId Truck identifier linked to the order.
+   * @param orderStatus Current order status.
+   * @throws NotFoundException if truck cannot be found for the user.
+   * @returns Nothing; side effect only.
+   */
+  private async syncTruckStatusWithOrder(
+    userId: string,
+    truckId: string,
+    orderStatus: OrderStatus,
+  ): Promise<void> {
+    const nextTruckStatus = this.resolveTruckStatusForOrder(orderStatus);
+    const updatedTruck = await this.truckRepository.updateStatus(
+      truckId,
+      userId,
+      nextTruckStatus,
+    );
+
+    if (!updatedTruck) {
+      throw new NotFoundException('Truck not found');
+    }
+  }
+
+  /**
    * Maps an order document to the outbound API response format.
    * @param order Order document returned by repository.
    * @throws Error no explicit throw; mapping only transforms persisted data.
@@ -375,69 +418,5 @@ export class OrdersService {
       'code' in error &&
       (error as { code?: number }).code === 11000
     );
-  }
-
-  /**
-   * Builds a stable cache key for an order scoped by owner.
-   * @param userId User identifier.
-   * @param orderId Order identifier.
-   * @throws Error no explicit throw; it concatenates two validated ids.
-   * @returns A string key used by in-memory maps.
-   */
-  private buildOrderCacheKey(userId: string, orderId: string): string {
-    return `${userId}:${orderId}`;
-  }
-
-  /**
-   * Reads a cached value and evicts it if already expired.
-   * @param cache In-memory map storing values and expiration metadata.
-   * @param key Cache entry key.
-   * @throws Error no explicit throw; it returns undefined when key is absent.
-   * @returns Cached value when present and valid, otherwise undefined.
-   */
-  private getCachedValue<T>(
-    cache: Map<string, CacheEntry<T>>,
-    key: string,
-  ): T | undefined {
-    const cachedEntry = cache.get(key);
-    if (!cachedEntry) {
-      return undefined;
-    }
-
-    if (cachedEntry.expiresAt <= Date.now()) {
-      cache.delete(key);
-      return undefined;
-    }
-
-    return cachedEntry.value;
-  }
-
-  /**
-   * Stores a value in cache with a short TTL.
-   * @param cache In-memory map where value should be saved.
-   * @param key Cache entry key.
-   * @param value Value to cache.
-   * @throws Error no explicit throw; it updates the in-memory map.
-   * @returns Nothing; side effect only.
-   */
-  private setCachedValue<T>(
-    cache: Map<string, CacheEntry<T>>,
-    key: string,
-    value: T,
-  ): void {
-    cache.set(key, {
-      value,
-      expiresAt: Date.now() + ORDER_CACHE_TTL_MS,
-    });
-  }
-
-  /**
-   * Invalidates cached order list for one owner after mutations.
-   * @param userId User identifier whose list cache should be removed.
-   * @throws Error no explicit throw; it only mutates in-memory cache.
-   * @returns Nothing; side effect only.
-   */
-  private invalidateOwnerCache(userId: string): void {
-    this.ordersByOwnerCache.delete(userId);
   }
 }

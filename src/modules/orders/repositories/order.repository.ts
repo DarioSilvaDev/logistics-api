@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import type { PaginatedQueryResult } from '../../../common/interfaces/pagination.interface';
 import {
   CreateOrderRepositoryInput,
+  FindOrdersByOwnerRepositoryInput,
   IOrderRepository,
   OrderStatusHistoryEntryInput,
 } from './order.repository.interface';
@@ -24,11 +26,47 @@ export class OrderRepository implements IOrderRepository {
     return this.orderModel.create(input);
   }
 
-  async findAllByOwner(userId: string): Promise<OrderDocument[]> {
-    return this.orderModel
-      .find({ createdBy: userId })
-      .sort({ createdAt: -1 })
-      .exec();
+  async findAllByOwner(
+    input: FindOrdersByOwnerRepositoryInput,
+  ): Promise<PaginatedQueryResult<OrderDocument>> {
+    const query: {
+      createdBy: string;
+      status?: OrderStatus;
+      createdAt?: {
+        $gte?: Date;
+        $lte?: Date;
+      };
+    } = {
+      createdBy: input.userId,
+    };
+
+    if (input.status) {
+      query.status = input.status;
+    }
+
+    if (input.createdFrom || input.createdTo) {
+      query.createdAt = {};
+
+      if (input.createdFrom) {
+        query.createdAt.$gte = input.createdFrom;
+      }
+
+      if (input.createdTo) {
+        query.createdAt.$lte = input.createdTo;
+      }
+    }
+
+    const [items, total] = await Promise.all([
+      this.orderModel
+        .find(query)
+        .sort({ createdAt: -1 })
+        .skip((input.page - 1) * input.limit)
+        .limit(input.limit)
+        .exec(),
+      this.orderModel.countDocuments(query).exec(),
+    ]);
+
+    return { items, total };
   }
 
   async findByIdAndOwner(

@@ -6,7 +6,13 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Types } from 'mongoose';
+import {
+  DEFAULT_LIMIT,
+  DEFAULT_PAGE,
+} from '../../common/dto/pagination-query.dto';
+import type { PaginatedResponse } from '../../common/interfaces/pagination.interface';
 import { CreateLocationDto } from './dto/create-location.dto';
+import { FindLocationsQueryDto } from './dto/find-locations-query.dto';
 import { UpdateLocationDto } from './dto/update-location.dto';
 import { LOCATION_REPOSITORY } from './repositories/location.repository.token';
 import type { ILocationRepository } from './repositories/location.repository.interface';
@@ -92,11 +98,35 @@ export class LocationsService {
    * Lista todas las ubicaciones registradas por un usuario.
    * @param userId Identificador del usuario propietario de las ubicaciones.
    * @throws Error si el repositorio falla durante la consulta.
-   * @returns La coleccion de ubicaciones del usuario.
+   * @returns Resultado paginado de ubicaciones del usuario.
    */
-  async findAll(userId: string): Promise<LocationResponse[]> {
-    const locations = await this.locationRepository.findAllByOwner(userId);
-    return locations.map((location) => this.mapLocation(location));
+  async findAll(
+    userId: string,
+    query: FindLocationsQueryDto,
+  ): Promise<PaginatedResponse<LocationResponse>> {
+    const page = query.page ?? DEFAULT_PAGE;
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const rawName = query.name?.trim();
+    const name = rawName ? this.escapeRegex(rawName) : undefined;
+
+    const result = await this.locationRepository.findAllByOwner({
+      userId,
+      page,
+      limit,
+      name,
+    });
+
+    const totalPages = Math.max(1, Math.ceil(result.total / limit));
+
+    return {
+      items: result.items.map((location) => this.mapLocation(location)),
+      page,
+      limit,
+      total: result.total,
+      totalPages,
+      hasNextPage: page < totalPages,
+      hasPreviousPage: page > 1,
+    };
   }
 
   /**
@@ -205,6 +235,16 @@ export class LocationsService {
       latitude: document.latitude,
       longitude: document.longitude,
     };
+  }
+
+  /**
+   * Escapes regex special characters from user-provided text filters.
+   * @param value Raw filter value.
+   * @throws Error no explicit throw; deterministic string transformation only.
+   * @returns Escaped text safe for regex substring queries.
+   */
+  private escapeRegex(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**

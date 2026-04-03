@@ -1,3 +1,4 @@
+import type { PaginatedQueryResult } from '../../../common/interfaces/pagination.interface';
 import { OrderDocument, OrderStatus } from '../schemas/order.schema';
 
 export interface OrderStatusHistoryEntryInput {
@@ -14,9 +15,20 @@ export interface CreateOrderRepositoryInput {
   statusHistory: OrderStatusHistoryEntryInput[];
 }
 
+export interface FindOrdersByOwnerRepositoryInput {
+  userId: string;
+  page: number;
+  limit: number;
+  status?: OrderStatus;
+  createdFrom?: Date;
+  createdTo?: Date;
+}
+
 export interface IOrderRepository {
   create(input: CreateOrderRepositoryInput): Promise<OrderDocument>;
-  findAllByOwner(userId: string): Promise<OrderDocument[]>;
+  findAllByOwner(
+    input: FindOrdersByOwnerRepositoryInput,
+  ): Promise<PaginatedQueryResult<OrderDocument>>;
   findByIdAndOwner(id: string, userId: string): Promise<OrderDocument | null>;
   findActiveByTruck(
     truckId: string,
