@@ -30,4 +30,8 @@ export interface ITruckRepository {
     userId: string,
     status: TruckStatus,
   ): Promise<TruckDocument | null>;
+  softDeleteByIdAndOwner(
+    id: string,
+    userId: string,
+  ): Promise<TruckDocument | null>;
 }

@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -228,5 +231,54 @@ export class TrucksController {
     @Body() dto: UpdateTruckStatusDto,
   ) {
     return this.trucksService.updateStatus(userId, truckId, dto);
+  }
+
+  @ApiOperation({ summary: 'Soft delete truck by id' })
+  @ApiResponse({ status: 204, description: 'Truck deleted successfully.' })
+  @ApiResponse({
+    status: 404,
+    description: 'Truck not found.',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Truck not found',
+        path: '/api/trucks/6605e6c1f2f5f9f7d2f1a555',
+        timestamp: '2026-04-03T12:00:00.000Z',
+        requestId: '2f72c04f-c44a-4ef8-933e-989de6802d74',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Truck has active orders.',
+    schema: {
+      example: {
+        statusCode: 409,
+        message: 'Truck has active orders',
+        path: '/api/trucks/6605e6c1f2f5f9f7d2f1a555',
+        timestamp: '2026-04-03T12:00:00.000Z',
+        requestId: '2f72c04f-c44a-4ef8-933e-989de6802d74',
+      },
+    },
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid truck id.',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Invalid truck id',
+        path: '/api/trucks/invalid-id',
+        timestamp: '2026-04-03T12:00:00.000Z',
+        requestId: '2f72c04f-c44a-4ef8-933e-989de6802d74',
+      },
+    },
+  })
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(
+    @CurrentUser('userId') userId: string,
+    @Param('id') truckId: string,
+  ): Promise<void> {
+    await this.trucksService.remove(userId, truckId);
   }
 }

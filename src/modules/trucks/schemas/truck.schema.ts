@@ -56,6 +56,9 @@ export class Truck {
 
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
   createdBy: Types.ObjectId;
+
+  @Prop({ type: Date, default: null, index: true })
+  deletedAt?: Date | null;
 }
 
 export type TruckDocument = HydratedDocument<Truck>;
