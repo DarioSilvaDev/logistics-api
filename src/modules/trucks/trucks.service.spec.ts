@@ -71,7 +71,9 @@ describe('TrucksService', () => {
 
   it('throws conflict when truck has active orders', async () => {
     truckRepository.findByIdAndOwner.mockResolvedValue(createTruckDocument());
-    orderRepository.findActiveByTruck.mockResolvedValue({ _id: objectId('1') } as any);
+    orderRepository.findActiveByTruck.mockResolvedValue({
+      _id: objectId('1'),
+    } as any);
 
     await expect(service.remove(userId, truckId)).rejects.toBeInstanceOf(
       ConflictException,
@@ -83,7 +85,9 @@ describe('TrucksService', () => {
   it('soft deletes truck when no active orders exist', async () => {
     truckRepository.findByIdAndOwner.mockResolvedValue(createTruckDocument());
     orderRepository.findActiveByTruck.mockResolvedValue(null);
-    truckRepository.softDeleteByIdAndOwner.mockResolvedValue(createTruckDocument());
+    truckRepository.softDeleteByIdAndOwner.mockResolvedValue(
+      createTruckDocument(),
+    );
 
     await expect(service.remove(userId, truckId)).resolves.toBeUndefined();
 

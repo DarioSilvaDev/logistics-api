@@ -22,6 +22,9 @@ export class User {
 
   @Prop({ required: true, trim: true, maxlength: 100 })
   lastName: string;
+
+  @Prop({ type: Date, default: null, index: true })
+  deletedAt?: Date | null;
 }
 
 export type UserDocument = HydratedDocument<User>;

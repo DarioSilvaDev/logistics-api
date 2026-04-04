@@ -23,5 +23,9 @@ export interface IAuthRepository {
     refreshTokenHash: string,
     refreshTokenExpiresAt: Date,
   ): Promise<AuthDocument | null>;
+  setPasswordAndResetSecurity(
+    userId: string,
+    passwordHash: string,
+  ): Promise<AuthDocument | null>;
   clearRefreshToken(userId: string): Promise<void>;
 }

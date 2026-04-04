@@ -47,12 +47,14 @@ describe('AuthService', () => {
     [string, string]
   >;
 
-  const createUserDocument = () =>
+  const createUserDocument = (overrides: Partial<any> = {}) =>
     ({
       _id: { toString: () => userId },
       email: 'john.doe@example.com',
       firstName: 'John',
       lastName: 'Doe',
+      deletedAt: null,
+      ...overrides,
     }) as any;
 
   const createAuthDocument = (overrides: Partial<any> = {}) =>
@@ -74,6 +76,9 @@ describe('AuthService', () => {
       create: jest.fn(),
       findByEmail: jest.fn(),
       findById: jest.fn(),
+      updateById: jest.fn(),
+      softDeleteById: jest.fn(),
+      reactivateById: jest.fn(),
       deleteById: jest.fn(),
     } as unknown as jest.Mocked<IUserRepository>;
 
@@ -84,6 +89,7 @@ describe('AuthService', () => {
       resetLoginAttempts: jest.fn(),
       updateLastLogin: jest.fn(),
       updateRefreshToken: jest.fn(),
+      setPasswordAndResetSecurity: jest.fn(),
       clearRefreshToken: jest.fn(),
     } as unknown as jest.Mocked<IAuthRepository>;
 
@@ -110,7 +116,10 @@ describe('AuthService', () => {
       password: 'Password123!',
     });
 
-    expect(userRepository.findByEmail).toHaveBeenCalledWith('john.doe@example.com');
+    expect(userRepository.findByEmail).toHaveBeenCalledWith(
+      'john.doe@example.com',
+      true,
+    );
     expect(userRepository.create).toHaveBeenCalledWith({
       email: 'john.doe@example.com',
       firstName: 'John',
@@ -145,6 +154,42 @@ describe('AuthService', () => {
 
     expect(userRepository.create).not.toHaveBeenCalled();
     expect(authRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('reactivates user when email exists with deletedAt', async () => {
+    userRepository.findByEmail.mockResolvedValue(
+      createUserDocument({ deletedAt: new Date('2026-04-01T00:00:00.000Z') }),
+    );
+    bcryptHashMock.mockResolvedValue('new-hashed-password');
+    authRepository.setPasswordAndResetSecurity.mockResolvedValue(
+      createAuthDocument(),
+    );
+    userRepository.reactivateById.mockResolvedValue(createUserDocument());
+
+    const result = await service.register({
+      email: 'john.doe@example.com',
+      firstName: ' John ',
+      lastName: ' Doe ',
+      password: 'Password123!',
+    });
+
+    expect(authRepository.setPasswordAndResetSecurity).toHaveBeenCalledWith(
+      userId,
+      'new-hashed-password',
+    );
+    expect(userRepository.reactivateById).toHaveBeenCalledWith(userId, {
+      firstName: 'John',
+      lastName: 'Doe',
+    });
+    expect(userRepository.create).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      user: {
+        id: userId,
+        email: 'john.doe@example.com',
+        firstName: 'John',
+        lastName: 'Doe',
+      },
+    });
   });
 
   it('rolls back user creation when auth record creation fails with duplicate key', async () => {
@@ -247,7 +292,10 @@ describe('AuthService', () => {
       );
     }
 
-    expect(authRepository.incrementLoginAttempts).toHaveBeenCalledWith(userId, 15);
+    expect(authRepository.incrementLoginAttempts).toHaveBeenCalledWith(
+      userId,
+      15,
+    );
     expect(authRepository.updateLastLogin).not.toHaveBeenCalled();
   });
 

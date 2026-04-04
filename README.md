@@ -100,21 +100,29 @@ Reglas principales implementadas:
 
 - registro con email normalizado y password hasheado (`bcrypt`)
 - deteccion de email duplicado con manejo explicito de clave unica
+- si el email existe con cuenta inactiva (`deletedAt != null`), se reactiva la cuenta
+- al reactivar cuenta se actualiza password y se resetea seguridad (`isBlocked=false`, `loginAttempts=0`, `blockedUntil=null`)
 - login con bloqueo temporal por intentos fallidos (`MAX_LOGIN_ATTEMPTS`, `BLOCK_DURATION_MINUTES`)
 - emision de access token + refresh token
 - refresh token persistido como hash (no texto plano)
 - expiracion de refresh token controlada por `REFRESH_TOKEN_TTL_DAYS`
 - logout con invalidacion del refresh token persistido
+- cuentas inactivas no pueden hacer login, refresh ni usar access token vigente
 
 ### 5.2 Users
 
 Endpoint:
 
 - `GET /api/users/me` (autenticado)
+- `PATCH /api/users/me` (autenticado)
+- `DELETE /api/users/me` (autenticado)
 
 Capacidad:
 
 - obtiene perfil del usuario autenticado
+- actualiza nombre y apellido del usuario autenticado
+- inactiva la cuenta del usuario (`soft delete` con `deletedAt`) y revoca refresh token
+- la inactivacion invalida sesiones activas porque JWT strategy verifica que el usuario siga activo
 
 ### 5.3 Trucks
 
@@ -183,6 +191,7 @@ Reglas principales:
 ### `users`
 
 - `email` unico + index
+- `deletedAt` indexado para soft delete/reactivacion de cuenta
 
 ### `auth`
 

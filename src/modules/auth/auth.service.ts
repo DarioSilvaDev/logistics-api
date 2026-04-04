@@ -67,12 +67,54 @@ export class AuthService {
     const firstName = dto.firstName.trim();
     const lastName = dto.lastName.trim();
 
-    const existingUser = await this.userRepository.findByEmail(email);
-    if (existingUser) {
+    const existingUser = await this.userRepository.findByEmail(email, true);
+    if (existingUser && !existingUser.deletedAt) {
       throw new ConflictException('Email already registered');
     }
 
     const passwordHash = await bcrypt.hash(dto.password, this.bcryptSaltRounds);
+
+    if (existingUser?.deletedAt) {
+      const userId = existingUser._id.toString();
+
+      const authRecord = await this.authRepository.setPasswordAndResetSecurity(
+        userId,
+        passwordHash,
+      );
+
+      if (!authRecord) {
+        await this.authRepository.create({
+          userId,
+          password: passwordHash,
+          maxLoginAttempts: this.maxLoginAttempts,
+        });
+      }
+
+      const reactivatedUser = await this.userRepository.reactivateById(userId, {
+        firstName,
+        lastName,
+      });
+
+      if (!reactivatedUser) {
+        throw new HttpException(
+          'Could not reactivate user account',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      this.logger.log(
+        `User reactivated with id=${reactivatedUser._id.toString()}`,
+      );
+
+      return {
+        user: {
+          id: reactivatedUser._id.toString(),
+          email: reactivatedUser.email,
+          firstName: reactivatedUser.firstName,
+          lastName: reactivatedUser.lastName,
+        },
+      };
+    }
 
     const user = await this.userRepository
       .create({
@@ -122,10 +164,14 @@ export class AuthService {
    */
   async login(dto: LoginDto): Promise<AuthResponse> {
     const email = dto.email.trim().toLowerCase();
-    const user = await this.userRepository.findByEmail(email);
+    const user = await this.userRepository.findByEmail(email, true);
 
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.deletedAt) {
+      throw new UnauthorizedException('Account inactive');
     }
 
     const auth = await this.authRepository.findByUserId(
@@ -221,8 +267,8 @@ export class AuthService {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
-    const user = await this.userRepository.findById(payload.sub);
-    if (!user) {
+    const user = await this.userRepository.findById(payload.sub, true);
+    if (!user || user.deletedAt) {
       throw new UnauthorizedException('Invalid refresh token');
     }
 
