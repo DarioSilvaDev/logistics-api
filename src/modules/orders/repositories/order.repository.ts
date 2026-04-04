@@ -13,6 +13,7 @@ import {
   Order,
   OrderDocument,
   OrderStatus,
+  RESERVED_TRUCK_ORDER_STATUSES,
 } from '../schemas/order.schema';
 
 @Injectable()
@@ -112,5 +113,32 @@ export class OrderRepository implements IOrderRepository {
         { returnDocument: 'after' },
       )
       .exec();
+  }
+
+  async findReservedByTruck(
+    truckId: string,
+    excludeOrderId?: string,
+  ): Promise<OrderDocument | null> {
+    const query: {
+      truckId: string;
+      status: { $in: OrderStatus[] };
+      _id?: { $ne: string };
+    } = {
+      truckId,
+      status: { $in: RESERVED_TRUCK_ORDER_STATUSES },
+    };
+
+    if (excludeOrderId) {
+      query._id = { $ne: excludeOrderId };
+    }
+
+    return this.orderModel.findOne(query).exec();
+  }
+
+  async deleteByIdAndOwner(
+    id: string,
+    userId: string,
+  ): Promise<OrderDocument | null> {
+    return this.orderModel.findOneAndDelete({ _id: id, createdBy: userId }).exec();
   }
 }

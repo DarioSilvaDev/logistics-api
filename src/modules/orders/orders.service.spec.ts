@@ -16,6 +16,7 @@ describe('OrdersService', () => {
   const pickupId = '507f1f77bcf86cd799439013';
   const dropoffId = '507f1f77bcf86cd799439014';
   const orderId = '507f1f77bcf86cd799439015';
+  const secondOrderId = '507f1f77bcf86cd799439016';
 
   let service: OrdersService;
   let orderRepository: jest.Mocked<IOrderRepository>;
@@ -48,13 +49,31 @@ describe('OrdersService', () => {
       ],
     }) as any;
 
+  const createOrderDocumentWithId = (
+    id: string,
+    status: OrderStatus = OrderStatus.CREATED,
+  ) =>
+    ({
+      _id: objectId(id),
+      createdBy: objectId(userId),
+      truckId: objectId(truckId),
+      pickupId: objectId(pickupId),
+      dropoffId: objectId(dropoffId),
+      status,
+      statusHistory: [
+        { status, changedAt: new Date('2026-01-01T00:00:00.000Z') },
+      ],
+    }) as any;
+
   beforeEach(() => {
     orderRepository = {
       create: jest.fn(),
       findAllByOwner: jest.fn(),
       findByIdAndOwner: jest.fn(),
       findActiveByTruck: jest.fn(),
+      findReservedByTruck: jest.fn(),
       updateStatusByIdAndOwner: jest.fn(),
+      deleteByIdAndOwner: jest.fn(),
     } as unknown as jest.Mocked<IOrderRepository>;
 
     truckRepository = {
@@ -101,22 +120,32 @@ describe('OrdersService', () => {
     ).rejects.toThrow('Pickup and dropoff locations must differ');
   });
 
-  it('throws conflict when order creation hits duplicate active-order constraint', async () => {
+  it('allows creating multiple CREATED orders for the same truck', async () => {
     truckRepository.findByIdAndOwner.mockResolvedValue(createTruckDocument());
     locationRepository.findByIdAndOwner
-      .mockResolvedValueOnce({ _id: objectId(pickupId) } as any)
-      .mockResolvedValueOnce({ _id: objectId(dropoffId) } as any);
-    orderRepository.findActiveByTruck.mockResolvedValue(null);
-    orderRepository.create.mockRejectedValue({ code: 11000 });
+      .mockResolvedValue({ _id: objectId(pickupId) } as any)
+      .mockResolvedValue({ _id: objectId(dropoffId) } as any);
+    orderRepository.create
+      .mockResolvedValueOnce(createOrderDocumentWithId(orderId, OrderStatus.CREATED))
+      .mockResolvedValueOnce(
+        createOrderDocumentWithId(secondOrderId, OrderStatus.CREATED),
+      );
 
-    await expect(
-      service.create(userId, {
-        truckId,
-        pickupId,
-        dropoffId,
-      }),
-    ).rejects.toBeInstanceOf(ConflictException);
+    const firstOrder = await service.create(userId, {
+      truckId,
+      pickupId,
+      dropoffId,
+    });
 
+    const secondOrder = await service.create(userId, {
+      truckId,
+      pickupId,
+      dropoffId,
+    });
+
+    expect(firstOrder.status).toBe(OrderStatus.CREATED);
+    expect(secondOrder.status).toBe(OrderStatus.CREATED);
+    expect(orderRepository.create).toHaveBeenCalledTimes(2);
     expect(truckRepository.updateStatus).not.toHaveBeenCalled();
   });
 
@@ -127,11 +156,7 @@ describe('OrdersService', () => {
     locationRepository.findByIdAndOwner
       .mockResolvedValueOnce({ _id: objectId(pickupId) } as any)
       .mockResolvedValueOnce({ _id: objectId(dropoffId) } as any);
-    orderRepository.findActiveByTruck.mockResolvedValue(null);
     orderRepository.create.mockResolvedValue(createdOrder);
-    truckRepository.updateStatus.mockResolvedValue(
-      createTruckDocument(TruckStatus.UNAVAILABLE),
-    );
 
     const result = await service.create(userId, {
       truckId,
@@ -152,11 +177,7 @@ describe('OrdersService', () => {
         },
       ],
     });
-    expect(truckRepository.updateStatus).toHaveBeenCalledWith(
-      truckId,
-      userId,
-      TruckStatus.UNAVAILABLE,
-    );
+    expect(truckRepository.updateStatus).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       id: orderId,
       status: OrderStatus.CREATED,
@@ -181,6 +202,23 @@ describe('OrdersService', () => {
     expect(orderRepository.updateStatusByIdAndOwner).not.toHaveBeenCalled();
   });
 
+  it('rejects assignment when another reserved order exists for same truck', async () => {
+    orderRepository.findByIdAndOwner.mockResolvedValue(
+      createOrderDocument(OrderStatus.CREATED),
+    );
+    orderRepository.findReservedByTruck.mockResolvedValue(
+      createOrderDocumentWithId(secondOrderId, OrderStatus.ASSIGNED),
+    );
+
+    await expect(
+      service.updateStatus(userId, orderId, {
+        status: OrderStatus.ASSIGNED,
+      }),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(orderRepository.updateStatusByIdAndOwner).not.toHaveBeenCalled();
+  });
+
   it('rejects transition from terminal order status', async () => {
     orderRepository.findByIdAndOwner.mockResolvedValue(
       createOrderDocument(OrderStatus.DELIVERED),
@@ -199,6 +237,7 @@ describe('OrdersService', () => {
     orderRepository.findByIdAndOwner.mockResolvedValue(
       createOrderDocument(OrderStatus.IN_TRANSIT),
     );
+    orderRepository.findReservedByTruck.mockResolvedValue(null);
     orderRepository.updateStatusByIdAndOwner.mockResolvedValue(updatedOrder);
     truckRepository.updateStatus.mockResolvedValue(
       createTruckDocument(TruckStatus.AVAILABLE),
@@ -263,5 +302,58 @@ describe('OrdersService', () => {
     await expect(
       service.updateStatus(userId, orderId, { status: OrderStatus.DELIVERED }),
     ).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('deletes reserved order and releases truck when no other reserved orders exist', async () => {
+    orderRepository.findByIdAndOwner.mockResolvedValue(
+      createOrderDocument(OrderStatus.ASSIGNED),
+    );
+    orderRepository.deleteByIdAndOwner.mockResolvedValue(
+      createOrderDocument(OrderStatus.ASSIGNED),
+    );
+    orderRepository.findReservedByTruck.mockResolvedValue(null);
+    truckRepository.updateStatus.mockResolvedValue(
+      createTruckDocument(TruckStatus.AVAILABLE),
+    );
+
+    await expect(service.remove(userId, orderId)).resolves.toBeUndefined();
+
+    expect(orderRepository.deleteByIdAndOwner).toHaveBeenCalledWith(
+      orderId,
+      userId,
+    );
+    expect(truckRepository.updateStatus).toHaveBeenCalledWith(
+      truckId,
+      userId,
+      TruckStatus.AVAILABLE,
+    );
+  });
+
+  it('deletes CREATED order without changing truck status', async () => {
+    orderRepository.findByIdAndOwner.mockResolvedValue(
+      createOrderDocument(OrderStatus.CREATED),
+    );
+    orderRepository.deleteByIdAndOwner.mockResolvedValue(
+      createOrderDocument(OrderStatus.CREATED),
+    );
+
+    await expect(service.remove(userId, orderId)).resolves.toBeUndefined();
+
+    expect(orderRepository.findReservedByTruck).not.toHaveBeenCalled();
+    expect(truckRepository.updateStatus).not.toHaveBeenCalled();
+  });
+
+  it('throws bad request on delete when order id is invalid', async () => {
+    await expect(service.remove(userId, 'invalid-id')).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+  });
+
+  it('throws not found on delete when order does not exist', async () => {
+    orderRepository.findByIdAndOwner.mockResolvedValue(null);
+
+    await expect(service.remove(userId, orderId)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 });

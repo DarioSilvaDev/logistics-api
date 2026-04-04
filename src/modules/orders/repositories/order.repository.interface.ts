@@ -34,10 +34,15 @@ export interface IOrderRepository {
     truckId: string,
     excludeOrderId?: string,
   ): Promise<OrderDocument | null>;
+  findReservedByTruck(
+    truckId: string,
+    excludeOrderId?: string,
+  ): Promise<OrderDocument | null>;
   updateStatusByIdAndOwner(
     id: string,
     userId: string,
     status: OrderStatus,
     statusHistoryEntry: OrderStatusHistoryEntryInput,
   ): Promise<OrderDocument | null>;
+  deleteByIdAndOwner(id: string, userId: string): Promise<OrderDocument | null>;
 }

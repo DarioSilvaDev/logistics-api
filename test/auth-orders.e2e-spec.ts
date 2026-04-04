@@ -92,6 +92,11 @@ const ACTIVE_ORDER_STATUSES = new Set<OrderStatus>([
   OrderStatus.IN_TRANSIT,
 ]);
 
+const RESERVED_ORDER_STATUSES = new Set<OrderStatus>([
+  OrderStatus.ASSIGNED,
+  OrderStatus.IN_TRANSIT,
+]);
+
 const toObjectId = (id: string): ObjectIdLike => ({
   toString: () => id,
 });
@@ -611,13 +616,16 @@ class InMemoryOrderRepository {
     status: OrderStatus;
     statusHistory: StatusHistoryEntry[];
   }): Promise<any> {
-    const duplicatedActiveOrder = Array.from(this.orders.values()).find(
+    const duplicatedReservedOrder = Array.from(this.orders.values()).find(
       (order) =>
         order.truckId === input.truckId &&
-        ACTIVE_ORDER_STATUSES.has(order.status),
+        RESERVED_ORDER_STATUSES.has(order.status),
     );
 
-    if (duplicatedActiveOrder) {
+    if (
+      RESERVED_ORDER_STATUSES.has(input.status) &&
+      duplicatedReservedOrder
+    ) {
       throw { code: 11000 };
     }
 
@@ -706,6 +714,20 @@ class InMemoryOrderRepository {
     return record ? this.toDocument(record) : null;
   }
 
+  async findReservedByTruck(
+    truckId: string,
+    excludeOrderId?: string,
+  ): Promise<any | null> {
+    const record = Array.from(this.orders.values()).find(
+      (order) =>
+        order.truckId === truckId &&
+        RESERVED_ORDER_STATUSES.has(order.status) &&
+        (!excludeOrderId || order.id !== excludeOrderId),
+    );
+
+    return record ? this.toDocument(record) : null;
+  }
+
   async updateStatusByIdAndOwner(
     id: string,
     userId: string,
@@ -717,9 +739,30 @@ class InMemoryOrderRepository {
       return null;
     }
 
+    const duplicatedReservedOrder = Array.from(this.orders.values()).find(
+      (order) =>
+        order.id !== id &&
+        order.truckId === record.truckId &&
+        RESERVED_ORDER_STATUSES.has(order.status),
+    );
+
+    if (RESERVED_ORDER_STATUSES.has(status) && duplicatedReservedOrder) {
+      throw { code: 11000 };
+    }
+
     record.status = status;
     record.statusHistory.push(statusHistoryEntry);
 
+    return this.toDocument(record);
+  }
+
+  async deleteByIdAndOwner(id: string, userId: string): Promise<any | null> {
+    const record = this.orders.get(id);
+    if (!record || record.createdBy !== userId) {
+      return null;
+    }
+
+    this.orders.delete(id);
     return this.toDocument(record);
   }
 
@@ -914,6 +957,21 @@ describe('Auth + Orders (e2e)', () => {
     };
   };
 
+  const createOrder = async (
+    accessToken: string,
+    input: {
+      truckId: string;
+      pickupId: string;
+      dropoffId: string;
+    },
+  ) => {
+    return request(app.getHttpServer())
+      .post('/api/orders')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send(input)
+      .expect(201);
+  };
+
   it('rejects access to orders endpoints without bearer token', async () => {
     const response = await request(app.getHttpServer())
       .get('/api/orders')
@@ -940,6 +998,9 @@ describe('Auth + Orders (e2e)', () => {
 
     expect(createOrderResponse.body.status).toBe(OrderStatus.CREATED);
     expect(createOrderResponse.body.statusHistory).toHaveLength(1);
+    expect(createOrderResponse.body.truck.id).toBe(truckId);
+    expect(createOrderResponse.body.pickup.id).toBe(pickupId);
+    expect(createOrderResponse.body.dropoff.id).toBe(dropoffId);
 
     const updateOrderResponse = await request(app.getHttpServer())
       .patch(`/api/orders/${createOrderResponse.body.id}/status`)
@@ -958,6 +1019,79 @@ describe('Auth + Orders (e2e)', () => {
     expect(listResponse.body.total).toBe(1);
     expect(listResponse.body.items[0].id).toBe(createOrderResponse.body.id);
     expect(listResponse.body.items[0].status).toBe(OrderStatus.ASSIGNED);
+    expect(listResponse.body.items[0].truck.id).toBe(truckId);
+    expect(listResponse.body.items[0].pickup.id).toBe(pickupId);
+    expect(listResponse.body.items[0].dropoff.id).toBe(dropoffId);
+  });
+
+  it('queues multiple CREATED orders for same truck and blocks second assignment', async () => {
+    const { accessToken } = await registerAndLogin();
+    const { truckId, pickupId, dropoffId } =
+      await createTruckAndLocations(accessToken);
+
+    const firstOrder = await createOrder(accessToken, {
+      truckId,
+      pickupId,
+      dropoffId,
+    });
+    const secondOrder = await createOrder(accessToken, {
+      truckId,
+      pickupId,
+      dropoffId,
+    });
+
+    expect(firstOrder.body.status).toBe(OrderStatus.CREATED);
+    expect(secondOrder.body.status).toBe(OrderStatus.CREATED);
+
+    await request(app.getHttpServer())
+      .patch(`/api/orders/${firstOrder.body.id as string}/status`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: OrderStatus.ASSIGNED })
+      .expect(200);
+
+    const secondAssignment = await request(app.getHttpServer())
+      .patch(`/api/orders/${secondOrder.body.id as string}/status`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: OrderStatus.ASSIGNED })
+      .expect(409);
+
+    expect(secondAssignment.body.message).toBe('Truck already has an active order');
+  });
+
+  it('deletes assigned order and allows assigning a queued one', async () => {
+    const { accessToken } = await registerAndLogin();
+    const { truckId, pickupId, dropoffId } =
+      await createTruckAndLocations(accessToken);
+
+    const firstOrder = await createOrder(accessToken, {
+      truckId,
+      pickupId,
+      dropoffId,
+    });
+    const secondOrder = await createOrder(accessToken, {
+      truckId,
+      pickupId,
+      dropoffId,
+    });
+
+    await request(app.getHttpServer())
+      .patch(`/api/orders/${firstOrder.body.id as string}/status`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: OrderStatus.ASSIGNED })
+      .expect(200);
+
+    await request(app.getHttpServer())
+      .delete(`/api/orders/${firstOrder.body.id as string}`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(204);
+
+    const assignSecond = await request(app.getHttpServer())
+      .patch(`/api/orders/${secondOrder.body.id as string}/status`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ status: OrderStatus.ASSIGNED })
+      .expect(200);
+
+    expect(assignSecond.body.status).toBe(OrderStatus.ASSIGNED);
   });
 
   it('returns 409 when deleting a truck with active orders', async () => {

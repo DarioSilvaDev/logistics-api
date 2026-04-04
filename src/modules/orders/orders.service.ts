@@ -13,6 +13,7 @@ import {
 import type { PaginatedResponse } from '../../common/interfaces/pagination.interface';
 import { LOCATION_REPOSITORY } from '../locations/repositories/location.repository.token';
 import type { ILocationRepository } from '../locations/repositories/location.repository.interface';
+import { LocationDocument } from '../locations/schemas/location.schema';
 import { TRUCK_REPOSITORY } from '../trucks/repositories/truck.repository.token';
 import type { ITruckRepository } from '../trucks/repositories/truck.repository.interface';
 import { TruckDocument, TruckStatus } from '../trucks/schemas/truck.schema';
@@ -24,7 +25,11 @@ import type {
   IOrderRepository,
   OrderStatusHistoryEntryInput,
 } from './repositories/order.repository.interface';
-import { OrderDocument, OrderStatus } from './schemas/order.schema';
+import {
+  OrderDocument,
+  OrderStatus,
+  RESERVED_TRUCK_ORDER_STATUSES,
+} from './schemas/order.schema';
 
 const ORDER_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
   [OrderStatus.CREATED]: [OrderStatus.ASSIGNED, OrderStatus.CANCELLED],
@@ -39,6 +44,10 @@ const TERMINAL_ORDER_STATUSES = new Set<OrderStatus>([
   OrderStatus.CANCELLED,
 ]);
 
+const RESERVED_ORDER_STATUSES = new Set<OrderStatus>(
+  RESERVED_TRUCK_ORDER_STATUSES,
+);
+
 export interface OrderStatusHistoryResponse {
   status: OrderStatus;
   changedAt: Date;
@@ -51,7 +60,29 @@ export interface OrderResponse {
   dropoffId: string;
   status: OrderStatus;
   createdBy: string;
+  truck: OrderTruckResponse | null;
+  pickup: OrderLocationResponse | null;
+  dropoff: OrderLocationResponse | null;
   statusHistory: OrderStatusHistoryResponse[];
+}
+
+export interface OrderTruckResponse {
+  id: string;
+  plate: string;
+  model: string;
+  color: string;
+  year: string;
+  capacityKg?: number;
+  status: TruckStatus;
+}
+
+export interface OrderLocationResponse {
+  id: string;
+  name: string;
+  address: string;
+  place_id: string;
+  latitude: number;
+  longitude: number;
 }
 
 @Injectable()
@@ -71,7 +102,6 @@ export class OrdersService {
    * @param dto Input payload with truck, pickup, and dropoff references.
    * @throws BadRequestException if any identifier is invalid or pickup and dropoff are equal.
    * @throws NotFoundException if truck, pickup, or dropoff does not exist for the user.
-   * @throws ConflictException if truck is not available or already has an active order.
    * @returns The newly created order as API response data.
    */
   async create(userId: string, dto: CreateOrderDto): Promise<OrderResponse> {
@@ -85,14 +115,9 @@ export class OrdersService {
     this.assertDifferentLocations(pickupId, dropoffId);
 
     const truck = await this.truckRepository.findByIdAndOwner(truckId, userId);
-    this.assertTruckCanBeAssigned(truck);
+    this.assertTruckExists(truck);
 
     await this.assertLocationsExist(userId, pickupId, dropoffId);
-
-    const activeOrder = await this.orderRepository.findActiveByTruck(truckId);
-    if (activeOrder) {
-      throw new ConflictException('Truck already has an active order');
-    }
 
     const statusHistoryEntry: OrderStatusHistoryEntryInput = {
       status: OrderStatus.CREATED,
@@ -109,9 +134,7 @@ export class OrdersService {
         statusHistory: [statusHistoryEntry],
       });
 
-      await this.syncTruckStatusWithOrder(userId, truckId, OrderStatus.CREATED);
-
-      return this.mapOrder(createdOrder);
+      return this.mapOrderWithRelations(userId, createdOrder);
     } catch (error: unknown) {
       if (this.isDuplicateKeyError(error)) {
         throw new ConflictException('Truck already has an active order');
@@ -152,7 +175,9 @@ export class OrdersService {
     const totalPages = Math.max(1, Math.ceil(result.total / limit));
 
     return {
-      items: result.items.map((order) => this.mapOrder(order)),
+      items: await Promise.all(
+        result.items.map((order) => this.mapOrderWithRelations(userId, order)),
+      ),
       page,
       limit,
       total: result.total,
@@ -178,7 +203,7 @@ export class OrdersService {
       throw new NotFoundException('Order not found');
     }
 
-    return this.mapOrder(order);
+    return this.mapOrderWithRelations(userId, order);
   }
 
   /**
@@ -208,15 +233,25 @@ export class OrdersService {
 
     this.assertCanTransitionStatus(currentOrder.status, dto.status);
 
-    const updatedOrder = await this.orderRepository.updateStatusByIdAndOwner(
-      orderId,
-      userId,
-      dto.status,
-      {
+    if (dto.status === OrderStatus.ASSIGNED) {
+      await this.assertTruckHasNoReservedOrders(
+        currentOrder.truckId.toString(),
+        orderId,
+      );
+    }
+
+    const updatedOrder = await this.orderRepository
+      .updateStatusByIdAndOwner(orderId, userId, dto.status, {
         status: dto.status,
         changedAt: new Date(),
-      },
-    );
+      })
+      .catch((error: unknown) => {
+        if (this.isDuplicateKeyError(error)) {
+          throw new ConflictException('Truck already has an active order');
+        }
+
+        throw error;
+      });
 
     if (!updatedOrder) {
       throw new NotFoundException('Order not found');
@@ -228,7 +263,56 @@ export class OrdersService {
       dto.status,
     );
 
-    return this.mapOrder(updatedOrder);
+    return this.mapOrderWithRelations(userId, updatedOrder);
+  }
+
+  /**
+   * Deletes an order owned by the authenticated user.
+   * @param userId User identifier that owns the order.
+   * @param orderId Order identifier to remove.
+   * @throws BadRequestException if order identifier is not a valid ObjectId.
+   * @throws NotFoundException if no order exists for that user and identifier.
+   * @returns Promise that resolves when deletion is completed.
+   */
+  async remove(userId: string, orderId: string): Promise<void> {
+    this.assertValidObjectId(orderId, 'order id');
+
+    const currentOrder = await this.orderRepository.findByIdAndOwner(
+      orderId,
+      userId,
+    );
+    if (!currentOrder) {
+      throw new NotFoundException('Order not found');
+    }
+
+    const deletedOrder = await this.orderRepository.deleteByIdAndOwner(
+      orderId,
+      userId,
+    );
+    if (!deletedOrder) {
+      throw new NotFoundException('Order not found');
+    }
+
+    if (!RESERVED_ORDER_STATUSES.has(deletedOrder.status)) {
+      return;
+    }
+
+    const remainingReservedOrder = await this.orderRepository.findReservedByTruck(
+      deletedOrder.truckId.toString(),
+      deletedOrder._id.toString(),
+    );
+
+    if (!remainingReservedOrder) {
+      const updatedTruck = await this.truckRepository.updateStatus(
+        deletedOrder.truckId.toString(),
+        userId,
+        TruckStatus.AVAILABLE,
+      );
+
+      if (!updatedTruck) {
+        throw new NotFoundException('Truck not found');
+      }
+    }
   }
 
   /**
@@ -277,19 +361,35 @@ export class OrdersService {
   }
 
   /**
-   * Ensures a truck exists and can be assigned to an order.
+   * Ensures a truck exists for the authenticated user.
    * @param truck Truck document resolved from repository.
    * @throws NotFoundException if truck does not exist for the user.
-   * @throws ConflictException if truck status is not AVAILABLE.
    * @returns Nothing; validation only.
    */
-  private assertTruckCanBeAssigned(truck: TruckDocument | null): void {
+  private assertTruckExists(truck: TruckDocument | null): void {
     if (!truck) {
       throw new NotFoundException('Truck not found');
     }
+  }
 
-    if (truck.status !== TruckStatus.AVAILABLE) {
-      throw new ConflictException('Truck is not available');
+  /**
+   * Ensures no other reserved order exists for the truck when assigning an order.
+   * @param truckId Truck identifier linked to the order.
+   * @param orderId Order identifier currently being assigned.
+   * @throws ConflictException if another reserved order already exists.
+   * @returns Promise that resolves when validation succeeds.
+   */
+  private async assertTruckHasNoReservedOrders(
+    truckId: string,
+    orderId: string,
+  ): Promise<void> {
+    const reservedOrder = await this.orderRepository.findReservedByTruck(
+      truckId,
+      orderId,
+    );
+
+    if (reservedOrder) {
+      throw new ConflictException('Truck already has an active order');
     }
   }
 
@@ -351,12 +451,12 @@ export class OrdersService {
    * Resolves the expected truck status from a given order status.
    * @param orderStatus Order status to evaluate.
    * @throws Error no explicit throw; deterministic mapping only.
-   * @returns AVAILABLE for terminal orders, otherwise UNAVAILABLE.
+   * @returns UNAVAILABLE for reserved statuses, otherwise AVAILABLE.
    */
   private resolveTruckStatusForOrder(orderStatus: OrderStatus): TruckStatus {
-    return TERMINAL_ORDER_STATUSES.has(orderStatus)
-      ? TruckStatus.AVAILABLE
-      : TruckStatus.UNAVAILABLE;
+    return RESERVED_ORDER_STATUSES.has(orderStatus)
+      ? TruckStatus.UNAVAILABLE
+      : TruckStatus.AVAILABLE;
   }
 
   /**
@@ -385,12 +485,22 @@ export class OrdersService {
   }
 
   /**
-   * Maps an order document to the outbound API response format.
+   * Maps an order with its related entities to the outbound API response format.
+   * @param userId Authenticated user owner.
    * @param order Order document returned by repository.
-   * @throws Error no explicit throw; mapping only transforms persisted data.
+   * @throws Error no explicit throw; mapping only transforms resolved data.
    * @returns A plain response object for controllers.
    */
-  private mapOrder(order: OrderDocument): OrderResponse {
+  private async mapOrderWithRelations(
+    userId: string,
+    order: OrderDocument,
+  ): Promise<OrderResponse> {
+    const [truck, pickup, dropoff] = await Promise.all([
+      this.truckRepository.findByIdAndOwner(order.truckId.toString(), userId),
+      this.locationRepository.findByIdAndOwner(order.pickupId.toString(), userId),
+      this.locationRepository.findByIdAndOwner(order.dropoffId.toString(), userId),
+    ]);
+
     return {
       id: order._id.toString(),
       truckId: order.truckId.toString(),
@@ -398,10 +508,48 @@ export class OrdersService {
       dropoffId: order.dropoffId.toString(),
       status: order.status,
       createdBy: order.createdBy.toString(),
+      truck: truck ? this.mapTruck(truck) : null,
+      pickup: pickup ? this.mapLocation(pickup) : null,
+      dropoff: dropoff ? this.mapLocation(dropoff) : null,
       statusHistory: (order.statusHistory ?? []).map((entry) => ({
         status: entry.status,
         changedAt: entry.changedAt,
       })),
+    };
+  }
+
+  /**
+   * Maps a truck document to an order-related truck response.
+   * @param truck Truck document.
+   * @throws Error no explicit throw; deterministic mapping only.
+   * @returns Serialized truck data for order responses.
+   */
+  private mapTruck(truck: TruckDocument): OrderTruckResponse {
+    return {
+      id: truck._id.toString(),
+      plate: truck.plate,
+      model: truck.model,
+      color: truck.color,
+      year: truck.year,
+      capacityKg: truck.capacityKg ?? undefined,
+      status: truck.status,
+    };
+  }
+
+  /**
+   * Maps a location document to an order-related location response.
+   * @param location Location document.
+   * @throws Error no explicit throw; deterministic mapping only.
+   * @returns Serialized location data for order responses.
+   */
+  private mapLocation(location: LocationDocument): OrderLocationResponse {
+    return {
+      id: location._id.toString(),
+      name: location.name,
+      address: location.address,
+      place_id: location.place_id,
+      latitude: location.latitude,
+      longitude: location.longitude,
     };
   }
 

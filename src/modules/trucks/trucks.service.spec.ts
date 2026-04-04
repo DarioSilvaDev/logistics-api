@@ -45,7 +45,9 @@ describe('TrucksService', () => {
       findAllByOwner: jest.fn(),
       findByIdAndOwner: jest.fn(),
       findActiveByTruck: jest.fn(),
+      findReservedByTruck: jest.fn(),
       updateStatusByIdAndOwner: jest.fn(),
+      deleteByIdAndOwner: jest.fn(),
     } as unknown as jest.Mocked<IOrderRepository>;
 
     service = new TrucksService(truckRepository, orderRepository);
