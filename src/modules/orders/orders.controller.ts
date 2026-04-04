@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -13,6 +16,7 @@ import {
   ApiBearerAuth,
   ApiConflictResponse,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -56,6 +60,31 @@ export class OrdersController {
         dropoffId: '6608b021fb1e47461d7f3333',
         status: 'CREATED',
         createdBy: '6605e6c1f2f5f9f7d2f1a123',
+        truck: {
+          id: '6605e6c1f2f5f9f7d2f1a555',
+          plate: 'ABC123',
+          model: 'Volvo FH16',
+          color: 'Blue',
+          year: '2023',
+          capacityKg: 24000,
+          status: 'AVAILABLE',
+        },
+        pickup: {
+          id: '6608b021fb1e47461d7f2222',
+          name: 'Pickup Hub',
+          address: 'Address for PLACE-A',
+          place_id: 'PLACE-A',
+          latitude: 10.1234,
+          longitude: -58.9876,
+        },
+        dropoff: {
+          id: '6608b021fb1e47461d7f3333',
+          name: 'Dropoff Hub',
+          address: 'Address for PLACE-B',
+          place_id: 'PLACE-B',
+          latitude: 10.1234,
+          longitude: -58.9876,
+        },
         statusHistory: [
           {
             status: 'CREATED',
@@ -119,6 +148,31 @@ export class OrdersController {
             dropoffId: '6608b021fb1e47461d7f3333',
             status: 'ASSIGNED',
             createdBy: '6605e6c1f2f5f9f7d2f1a123',
+            truck: {
+              id: '6605e6c1f2f5f9f7d2f1a555',
+              plate: 'ABC123',
+              model: 'Volvo FH16',
+              color: 'Blue',
+              year: '2023',
+              capacityKg: 24000,
+              status: 'UNAVAILABLE',
+            },
+            pickup: {
+              id: '6608b021fb1e47461d7f2222',
+              name: 'Pickup Hub',
+              address: 'Address for PLACE-A',
+              place_id: 'PLACE-A',
+              latitude: 10.1234,
+              longitude: -58.9876,
+            },
+            dropoff: {
+              id: '6608b021fb1e47461d7f3333',
+              name: 'Dropoff Hub',
+              address: 'Address for PLACE-B',
+              place_id: 'PLACE-B',
+              latitude: 10.1234,
+              longitude: -58.9876,
+            },
             statusHistory: [
               {
                 status: 'CREATED',
@@ -159,6 +213,31 @@ export class OrdersController {
         dropoffId: '6608b021fb1e47461d7f3333',
         status: 'IN_TRANSIT',
         createdBy: '6605e6c1f2f5f9f7d2f1a123',
+        truck: {
+          id: '6605e6c1f2f5f9f7d2f1a555',
+          plate: 'ABC123',
+          model: 'Volvo FH16',
+          color: 'Blue',
+          year: '2023',
+          capacityKg: 24000,
+          status: 'UNAVAILABLE',
+        },
+        pickup: {
+          id: '6608b021fb1e47461d7f2222',
+          name: 'Pickup Hub',
+          address: 'Address for PLACE-A',
+          place_id: 'PLACE-A',
+          latitude: 10.1234,
+          longitude: -58.9876,
+        },
+        dropoff: {
+          id: '6608b021fb1e47461d7f3333',
+          name: 'Dropoff Hub',
+          address: 'Address for PLACE-B',
+          place_id: 'PLACE-B',
+          latitude: 10.1234,
+          longitude: -58.9876,
+        },
         statusHistory: [
           {
             status: 'CREATED',
@@ -219,6 +298,31 @@ export class OrdersController {
         dropoffId: '6608b021fb1e47461d7f3333',
         status: 'DELIVERED',
         createdBy: '6605e6c1f2f5f9f7d2f1a123',
+        truck: {
+          id: '6605e6c1f2f5f9f7d2f1a555',
+          plate: 'ABC123',
+          model: 'Volvo FH16',
+          color: 'Blue',
+          year: '2023',
+          capacityKg: 24000,
+          status: 'AVAILABLE',
+        },
+        pickup: {
+          id: '6608b021fb1e47461d7f2222',
+          name: 'Pickup Hub',
+          address: 'Address for PLACE-A',
+          place_id: 'PLACE-A',
+          latitude: 10.1234,
+          longitude: -58.9876,
+        },
+        dropoff: {
+          id: '6608b021fb1e47461d7f3333',
+          name: 'Dropoff Hub',
+          address: 'Address for PLACE-B',
+          place_id: 'PLACE-B',
+          latitude: 10.1234,
+          longitude: -58.9876,
+        },
         statusHistory: [
           {
             status: 'CREATED',
@@ -285,5 +389,42 @@ export class OrdersController {
     @Body() dto: UpdateOrderStatusDto,
   ) {
     return this.ordersService.updateStatus(userId, orderId, dto);
+  }
+
+  @ApiOperation({ summary: 'Delete order by id' })
+  @ApiNoContentResponse({
+    description: 'Order deleted successfully.',
+  })
+  @ApiBadRequestResponse({
+    description: 'Order id is invalid.',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Invalid order id',
+        path: '/api/orders/invalid-id',
+        timestamp: '2026-04-02T12:00:00.000Z',
+        requestId: '2f72c04f-c44a-4ef8-933e-989de6802d74',
+      },
+    },
+  })
+  @ApiNotFoundResponse({
+    description: 'Order not found.',
+    schema: {
+      example: {
+        statusCode: 404,
+        message: 'Order not found',
+        path: '/api/orders/6610f3f6fb1e47461d7f7001',
+        timestamp: '2026-04-02T12:00:00.000Z',
+        requestId: '2f72c04f-c44a-4ef8-933e-989de6802d74',
+      },
+    },
+  })
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async remove(
+    @CurrentUser('userId') userId: string,
+    @Param('id') orderId: string,
+  ): Promise<void> {
+    await this.ordersService.remove(userId, orderId);
   }
 }
