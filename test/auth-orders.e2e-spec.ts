@@ -9,6 +9,8 @@ import { AuthService } from '../src/modules/auth/auth.service';
 import { AUTH_REPOSITORY } from '../src/modules/auth/repositories/auth.repository.token';
 import { JwtStrategy } from '../src/modules/auth/strategies/jwt.strategy';
 import { USER_REPOSITORY } from '../src/modules/users/repositories/user.repository.token';
+import { UsersController } from '../src/modules/users/users.controller';
+import { UsersService } from '../src/modules/users/users.service';
 import { TrucksController } from '../src/modules/trucks/trucks.controller';
 import { TrucksService } from '../src/modules/trucks/trucks.service';
 import { TRUCK_REPOSITORY } from '../src/modules/trucks/repositories/truck.repository.token';
@@ -29,6 +31,7 @@ interface UserRecord {
   email: string;
   firstName: string;
   lastName: string;
+  deletedAt: Date | null;
 }
 
 interface AuthRecord {
@@ -115,22 +118,81 @@ class InMemoryUserRepository {
       email: input.email,
       firstName: input.firstName,
       lastName: input.lastName,
+      deletedAt: null,
     };
 
     this.users.set(record.id, record);
     return this.toDocument(record);
   }
 
-  async findByEmail(email: string): Promise<any | null> {
+  async findByEmail(
+    email: string,
+    includeDeleted = false,
+  ): Promise<any | null> {
     const record = Array.from(this.users.values()).find(
-      (user) => user.email === email,
+      (user) =>
+        user.email === email && (includeDeleted || user.deletedAt === null),
     );
 
     return record ? this.toDocument(record) : null;
   }
 
-  async findById(id: string): Promise<any | null> {
+  async findById(id: string, includeDeleted = false): Promise<any | null> {
     const record = this.users.get(id);
+
+    if (!record) {
+      return null;
+    }
+
+    if (!includeDeleted && record.deletedAt !== null) {
+      return null;
+    }
+
+    return this.toDocument(record);
+  }
+
+  async updateById(
+    id: string,
+    input: { firstName: string; lastName: string },
+  ): Promise<any | null> {
+    const record = this.users.get(id);
+
+    if (!record || record.deletedAt !== null) {
+      return null;
+    }
+
+    record.firstName = input.firstName;
+    record.lastName = input.lastName;
+
+    return this.toDocument(record);
+  }
+
+  async softDeleteById(id: string): Promise<any | null> {
+    const record = this.users.get(id);
+
+    if (!record || record.deletedAt !== null) {
+      return null;
+    }
+
+    record.deletedAt = new Date();
+
+    return this.toDocument(record);
+  }
+
+  async reactivateById(
+    id: string,
+    input: { firstName: string; lastName: string },
+  ): Promise<any | null> {
+    const record = this.users.get(id);
+
+    if (!record || record.deletedAt === null) {
+      return null;
+    }
+
+    record.deletedAt = null;
+    record.firstName = input.firstName;
+    record.lastName = input.lastName;
+
     return record ? this.toDocument(record) : null;
   }
 
@@ -144,6 +206,7 @@ class InMemoryUserRepository {
       email: record.email,
       firstName: record.firstName,
       lastName: record.lastName,
+      deletedAt: record.deletedAt,
     };
   }
 }
@@ -193,7 +256,9 @@ class InMemoryAuthRepository {
     record.loginAttempts += 1;
     if (record.loginAttempts >= record.maxLoginAttempts) {
       record.isBlocked = true;
-      record.blockedUntil = new Date(Date.now() + blockDurationMinutes * 60 * 1000);
+      record.blockedUntil = new Date(
+        Date.now() + blockDurationMinutes * 60 * 1000,
+      );
     }
 
     return this.toDocument(record);
@@ -234,6 +299,25 @@ class InMemoryAuthRepository {
 
     record.refreshToken = refreshTokenHash;
     record.refreshTokenExpiresAt = refreshTokenExpiresAt;
+
+    return this.toDocument(record);
+  }
+
+  async setPasswordAndResetSecurity(
+    userId: string,
+    passwordHash: string,
+  ): Promise<any | null> {
+    const record = this.authByUserId.get(userId);
+    if (!record) {
+      return null;
+    }
+
+    record.password = passwordHash;
+    record.loginAttempts = 0;
+    record.isBlocked = false;
+    record.blockedUntil = null;
+    record.refreshToken = null;
+    record.refreshTokenExpiresAt = null;
 
     return this.toDocument(record);
   }
@@ -359,7 +443,10 @@ class InMemoryTruckRepository {
     return this.toDocument(record);
   }
 
-  async softDeleteByIdAndOwner(id: string, userId: string): Promise<any | null> {
+  async softDeleteByIdAndOwner(
+    id: string,
+    userId: string,
+  ): Promise<any | null> {
     const record = this.trucks.get(id);
     if (!record || record.createdBy !== userId || record.deletedAt !== null) {
       return null;
@@ -425,11 +512,13 @@ class InMemoryLocationRepository {
     return this.toDocument(record);
   }
 
-  async findByPlaceIdAndOwner(placeId: string, userId: string): Promise<any | null> {
+  async findByPlaceIdAndOwner(
+    placeId: string,
+    userId: string,
+  ): Promise<any | null> {
     const record = Array.from(this.locations.values()).find(
       (location) =>
-        location.createdBy === userId &&
-        location.place_id === placeId,
+        location.createdBy === userId && location.place_id === placeId,
     );
 
     return record ? this.toDocument(record) : null;
@@ -524,7 +613,8 @@ class InMemoryOrderRepository {
   }): Promise<any> {
     const duplicatedActiveOrder = Array.from(this.orders.values()).find(
       (order) =>
-        order.truckId === input.truckId && ACTIVE_ORDER_STATUSES.has(order.status),
+        order.truckId === input.truckId &&
+        ACTIVE_ORDER_STATUSES.has(order.status),
     );
 
     if (duplicatedActiveOrder) {
@@ -564,11 +654,17 @@ class InMemoryOrderRepository {
           return false;
         }
 
-        if (input.createdFrom && order.createdAt.getTime() < input.createdFrom.getTime()) {
+        if (
+          input.createdFrom &&
+          order.createdAt.getTime() < input.createdFrom.getTime()
+        ) {
           return false;
         }
 
-        if (input.createdTo && order.createdAt.getTime() > input.createdTo.getTime()) {
+        if (
+          input.createdTo &&
+          order.createdAt.getTime() > input.createdTo.getTime()
+        ) {
           return false;
         }
 
@@ -685,12 +781,14 @@ describe('Auth + Orders (e2e)', () => {
       ],
       controllers: [
         AuthController,
+        UsersController,
         TrucksController,
         LocationsController,
         OrdersController,
       ],
       providers: [
         AuthService,
+        UsersService,
         JwtStrategy,
         TrucksService,
         LocationsService,
@@ -741,16 +839,27 @@ describe('Auth + Orders (e2e)', () => {
     await app.close();
   });
 
-  const registerAndLogin = async () => {
-    const registerResponse = await request(app.getHttpServer())
+  const registerUser = async (input?: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    password: string;
+  }) => {
+    const payload = input ?? {
+      email: 'reviewer@example.com',
+      firstName: 'Review',
+      lastName: 'User',
+      password: 'Password123!',
+    };
+
+    return request(app.getHttpServer())
       .post('/api/auth/register')
-      .send({
-        email: 'reviewer@example.com',
-        firstName: 'Review',
-        lastName: 'User',
-        password: 'Password123!',
-      })
+      .send(payload)
       .expect(201);
+  };
+
+  const registerAndLogin = async () => {
+    const registerResponse = await registerUser();
 
     expect(registerResponse.body.user.email).toBe('reviewer@example.com');
 
@@ -806,7 +915,9 @@ describe('Auth + Orders (e2e)', () => {
   };
 
   it('rejects access to orders endpoints without bearer token', async () => {
-    const response = await request(app.getHttpServer()).get('/api/orders').expect(401);
+    const response = await request(app.getHttpServer())
+      .get('/api/orders')
+      .expect(401);
 
     expect(response.body.statusCode).toBe(401);
     expect(response.body.message).toBe('Unauthorized');
@@ -814,9 +925,8 @@ describe('Auth + Orders (e2e)', () => {
 
   it('creates and updates an order through auth + orders flow', async () => {
     const { accessToken } = await registerAndLogin();
-    const { truckId, pickupId, dropoffId } = await createTruckAndLocations(
-      accessToken,
-    );
+    const { truckId, pickupId, dropoffId } =
+      await createTruckAndLocations(accessToken);
 
     const createOrderResponse = await request(app.getHttpServer())
       .post('/api/orders')
@@ -852,9 +962,8 @@ describe('Auth + Orders (e2e)', () => {
 
   it('returns 409 when deleting a truck with active orders', async () => {
     const { accessToken } = await registerAndLogin();
-    const { truckId, pickupId, dropoffId } = await createTruckAndLocations(
-      accessToken,
-    );
+    const { truckId, pickupId, dropoffId } =
+      await createTruckAndLocations(accessToken);
 
     await request(app.getHttpServer())
       .post('/api/orders')
@@ -874,11 +983,69 @@ describe('Auth + Orders (e2e)', () => {
     expect(deleteTruckResponse.body.message).toBe('Truck has active orders');
   });
 
+  it('inactivates account and blocks existing access token', async () => {
+    const { accessToken } = await registerAndLogin();
+
+    await request(app.getHttpServer())
+      .delete('/api/users/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(204);
+
+    const profileAfterDelete = await request(app.getHttpServer())
+      .get('/api/users/me')
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(401);
+
+    expect(profileAfterDelete.body.message).toBe('Unauthorized');
+  });
+
+  it('reactivates deleted account when registering same email again', async () => {
+    const firstRegister = await registerUser();
+
+    const firstLogin = await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: 'reviewer@example.com',
+        password: 'Password123!',
+      })
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .delete('/api/users/me')
+      .set('Authorization', `Bearer ${firstLogin.body.accessToken as string}`)
+      .expect(204);
+
+    const reactivationRegister = await registerUser({
+      email: 'reviewer@example.com',
+      firstName: 'Reactivated',
+      lastName: 'User',
+      password: 'Password456!',
+    });
+
+    expect(reactivationRegister.body.user.id).toBe(firstRegister.body.user.id);
+    expect(reactivationRegister.body.user.firstName).toBe('Reactivated');
+
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: 'reviewer@example.com',
+        password: 'Password123!',
+      })
+      .expect(401);
+
+    await request(app.getHttpServer())
+      .post('/api/auth/login')
+      .send({
+        email: 'reviewer@example.com',
+        password: 'Password456!',
+      })
+      .expect(201);
+  });
+
   it('returns 409 for invalid transition from CREATED to DELIVERED', async () => {
     const { accessToken } = await registerAndLogin();
-    const { truckId, pickupId, dropoffId } = await createTruckAndLocations(
-      accessToken,
-    );
+    const { truckId, pickupId, dropoffId } =
+      await createTruckAndLocations(accessToken);
 
     const createOrderResponse = await request(app.getHttpServer())
       .post('/api/orders')
