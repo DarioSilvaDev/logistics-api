@@ -166,14 +166,16 @@ Endpoints (autenticados):
 - `GET /api/orders`
 - `GET /api/orders/:id`
 - `PATCH /api/orders/:id/status`
+- `DELETE /api/orders/:id`
 
 Reglas principales:
 
 - valida ObjectIds de truck/pickup/dropoff
 - pickup y dropoff deben ser distintos
 - truck, pickup y dropoff deben pertenecer al usuario autenticado
-- solo se puede crear orden con truck `AVAILABLE`
-- se impide mas de una orden activa por truck
+- se pueden crear multiples orders en `CREATED` para un mismo truck (cola)
+- `CREATED` no reserva truck; la reserva empieza en `ASSIGNED`
+- solo puede existir 1 order operativa (`ASSIGNED` o `IN_TRANSIT`) por truck
 - se mantiene historial de estados (`statusHistory`)
 - transiciones permitidas:
   - `CREATED -> ASSIGNED | CANCELLED`
@@ -181,9 +183,11 @@ Reglas principales:
   - `IN_TRANSIT -> DELIVERED`
   - terminales: `DELIVERED`, `CANCELLED`
 - al cambiar estado de orden, se sincroniza el estado del truck:
-  - orden activa -> truck `UNAVAILABLE`
+  - orden operativa (`ASSIGNED`/`IN_TRANSIT`) -> truck `UNAVAILABLE`
   - orden terminal -> truck `AVAILABLE`
+- al eliminar una order operativa, el truck vuelve a `AVAILABLE`
 - listado paginado con filtros `status`, `createdFrom`, `createdTo`
+- respuestas de orders incluyen IDs y datos relacionados: `truck`, `pickup`, `dropoff`
 
 <a id="sec-6"></a>
 ## 6) Modelo de datos e indices importantes
@@ -220,9 +224,9 @@ Reglas principales:
 ### `orders`
 
 - indice `{ createdBy: 1, createdAt: -1 }`
-- indice unico parcial para orden activa por truck:
+- indice unico parcial para orden operativa por truck:
   - clave: `{ truckId: 1 }`
-  - filtro parcial: `status in [CREATED, ASSIGNED, IN_TRANSIT]`
+  - filtro parcial: `status in [ASSIGNED, IN_TRANSIT]`
 
 Este ultimo indice es clave para integridad de negocio bajo concurrencia.
 
@@ -364,7 +368,7 @@ Se agrego una base inicial de tests unitarios con Jest para servicios core:
 Cobertura enfocada en reglas criticas:
 
 - auth: registro, login, bloqueo temporal, refresh token y logout
-- orders: creacion, validaciones, transiciones de estado y paginacion
+- orders: creacion en cola (`CREATED`), validaciones, transiciones de estado, delete y paginacion
 
 Comandos:
 
@@ -382,7 +386,7 @@ Se agrego una suite e2e minima para validar integracion entre modulos:
 La suite valida:
 
 - acceso denegado a rutas protegidas sin token
-- flujo completo `register -> login -> create order -> update status -> list orders`
+- flujo `register -> login -> create orders -> assign/update status -> delete -> list`
 - error de negocio por transicion invalida de estado (`409`)
 
 Comando:
