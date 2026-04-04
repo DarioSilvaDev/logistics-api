@@ -120,6 +120,28 @@ export class AuthRepository implements IAuthRepository {
       .exec();
   }
 
+  async setPasswordAndResetSecurity(
+    userId: string,
+    passwordHash: string,
+  ): Promise<AuthDocument | null> {
+    return this.authModel
+      .findOneAndUpdate(
+        { userId },
+        {
+          $set: {
+            password: passwordHash,
+            loginAttempts: 0,
+            isBlocked: false,
+            blockedUntil: null,
+            refreshToken: null,
+            refreshTokenExpiresAt: null,
+          },
+        },
+        { returnDocument: 'after' },
+      )
+      .exec();
+  }
+
   async clearRefreshToken(userId: string): Promise<void> {
     await this.authModel
       .findOneAndUpdate(
