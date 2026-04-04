@@ -15,6 +15,11 @@ export const ACTIVE_ORDER_STATUSES: OrderStatus[] = [
   OrderStatus.IN_TRANSIT,
 ];
 
+export const RESERVED_TRUCK_ORDER_STATUSES: OrderStatus[] = [
+  OrderStatus.ASSIGNED,
+  OrderStatus.IN_TRANSIT,
+];
+
 @Schema({ _id: false, versionKey: false })
 export class OrderStatusHistoryEntry {
   @Prop({ required: true, enum: OrderStatus })
@@ -67,7 +72,7 @@ OrderSchema.index(
   {
     unique: true,
     partialFilterExpression: {
-      status: { $in: ACTIVE_ORDER_STATUSES },
+      status: { $in: RESERVED_TRUCK_ORDER_STATUSES },
     },
   },
 );
